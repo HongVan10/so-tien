@@ -1295,12 +1295,15 @@ function hetKhoa(){
 let dangGui=null;
 function guiHang(){
   if(dangGui)return dangGui;
-  dangGui=(async()=>{
+  // cleared in .finally (always async), never inside the body: with an empty queue the body finishes
+  // synchronously, before dangGui is assigned, and would leave a stale promise blocking every later send
+  const p=(async()=>{
     try{while(HANG.length&&KHOA){await goi(HANG[0]);HANG.shift();luuHang();}}
     catch(e){if(e&&e.khoa)hetKhoa();else toast('Chưa lưu lên sheet, sẽ thử lại');}
-    finally{dangGui=null;}
   })();
-  return dangGui;
+  dangGui=p;
+  p.finally(()=>{if(dangGui===p)dangGui=null;});
+  return p;
 }
 function day(op){HANG.push(op);luuHang();guiHang();}
 function apCfg(d){
