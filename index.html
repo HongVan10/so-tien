@@ -1336,7 +1336,8 @@ function guiHang(){
   p.finally(()=>{if(dangGui===p)dangGui=null;});
   return p;
 }
-function day(op){HANG.push(op);luuHang();guiHang();}
+let THE_HE=0; // bumps on every local change, so a read that was in flight across a change can be recognised as stale
+function day(op){THE_HE++;HANG.push(op);luuHang();guiHang();}
 function apCfg(d){
   const c=JSON.parse(JSON.stringify(d));
   S.acc=c.acc||[];S.dat=c.dat||[];XN_CHI=c.xnChi||[];XN_THU=c.xnThu||[];
@@ -1349,7 +1350,7 @@ function apHang(){
   for(const op of HANG){
     if(op.op==='ghi'){S.log=S.log.filter(z=>z.id!==op.id);S.log.push(Object.assign({},op.data,{id:op.id}));}
     else if(op.op==='xoa')S.log=S.log.filter(z=>z.id!==op.id);
-    else if(op.op==='cfg'){const c=JSON.parse(JSON.stringify(op.data));if(c.acc)S.acc=c.acc;if(c.dat)S.dat=c.dat;if(c.noi)NOI=c.noi;}
+    else if(op.op==='cfg'){const c=JSON.parse(JSON.stringify(op.data));if(c.acc)S.acc=c.acc;if(c.dat&&!TAB_CU)S.dat=c.dat;if(c.noi)NOI=c.noi;}
   }
 }
 function luuCfg(){
@@ -1450,8 +1451,10 @@ async function tai(lanDau){
   const hen=lanDau?setTimeout(()=>{if(trangThai==='cho'){trangThai='cham';render();}},10000):0;
   try{
     await guiHang();
+    const g=THE_HE;
     const r=await goi({op:'tai',tabs:[TAB_SO,...TABS_CU]});
     clearTimeout(hen);
+    if(g!==THE_HE&&trangThai==='san'){setTimeout(()=>tai(false),1500);return;} // the sheet was read before this device's newest change
     const sig=JSON.stringify(r)+JSON.stringify(HANG);
     if(sig===daTai&&trangThai==='san'){sauDoi();return;}
     daTai=sig;DB=true;
@@ -1554,7 +1557,7 @@ function docTabCu(tabs){
 }
 // a balance the owner changed by hand in Chi tiết becomes an adjustment entry, so the app lands on the same number
 function soatChiTiet(){
-  const ct=TAB_CU&&TAB_CU[T_CT];if(!ct)return;
+  const ct=TAB_CU&&TAB_CU[T_CT];if(!ct||HANG.length)return;
   for(const {id,f} of ctMap(ct)){
     if(!ctTuGhi(id))continue;
     const s=soO(f), w=NOI.ct[id];
