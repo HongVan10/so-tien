@@ -1587,7 +1587,7 @@ function ghiTabCu(){
   }
   // Tổng quan: Tín dụng had no formula; give it the same one as its neighbours
   const tq=TAB_CU[T_TQ];
-  if(tq){const i=tq.findIndex(r=>chu(r[0])==='Tín dụng');if(i>=0&&chu(tq[i][1])==='')viet(T_TQ,i+1,2,[[`=SUMIF('Chi tiết'!B:B,A${i+1},'Chi tiết'!F:F)`]]);}
+  if(tq){const i=tq.findIndex(r=>chu(r[0])==='Tín dụng');if(i>=0&&chu(tq[i][1])==='')viet(T_TQ,i+1,2,[[`=SUMIF('Chi tiết'!B:B;A${i+1};'Chi tiết'!F:F)`]]); // the sheet is in Vietnamese locale: ';' between arguments}
   // Xây nhà: spending goes into the Chi list (C:D, Mã in E), income into the Thu list (A:B, Mã in H)
   const xn=TAB_CU[T_XN];
   if(xn){
