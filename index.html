@@ -1271,7 +1271,7 @@ document.querySelector('.wrap').addEventListener('click',e=>{
 
 /* ---------- Saving: the "Tracking Money" sheet through its Apps Script. Every write waits in an on-device
    queue until the sheet confirms it, so nothing is lost offline; reopening the app pulls the sheet again. ---------- */
-const SO_URL='__SO_URL__';
+const SO_URL='https://script.google.com/macros/s/AKfycbz9FqDF4439yx_uOuIo3TSBq-BuJgxW-iS7UhmFM-r6UoMtJ0_uaxT0vjvOIWeaJ86k/exec';
 let DB=null, cfgDaLuu='', trangThai='cho', daTai='';
 let KHOA=(()=>{try{return localStorage.getItem('st-khoa')||'';}catch(e){return '';}})();
 const TRANG={cho:'Đang mở sổ…',cham:'Chưa mở được sổ. Mạng chậm hoặc mất mạng.',trong:'Sổ chưa có dữ liệu.'};
