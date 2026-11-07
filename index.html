@@ -1342,22 +1342,23 @@ function apCfg(d){
   S.acc=c.acc||[];S.dat=c.dat||[];XN_CHI=c.xnChi||[];XN_THU=c.xnThu||[];
   NHA_DA_CHI=XN_CHI.reduce((s,r)=>s+r.v,0);
   if(c.dau)DAU=dmy(c.dau);
+  NOI=c.noi&&c.noi.ct?c.noi:{ct:{}};
 }
 // writes still waiting in the queue are laid over what the sheet returned
 function apHang(){
   for(const op of HANG){
     if(op.op==='ghi'){S.log=S.log.filter(z=>z.id!==op.id);S.log.push(Object.assign({},op.data,{id:op.id}));}
     else if(op.op==='xoa')S.log=S.log.filter(z=>z.id!==op.id);
-    else if(op.op==='cfg'){const c=JSON.parse(JSON.stringify(op.data));if(c.acc)S.acc=c.acc;if(c.dat)S.dat=c.dat;}
+    else if(op.op==='cfg'){const c=JSON.parse(JSON.stringify(op.data));if(c.acc)S.acc=c.acc;if(c.dat)S.dat=c.dat;if(c.noi)NOI=c.noi;}
   }
 }
 function luuCfg(){
   if(!DB||trangThai!=='san')return;
-  const now=JSON.stringify({acc:S.acc,dat:S.dat});
+  const now=JSON.stringify({acc:S.acc,dat:S.dat.map(({_r,...d})=>d),noi:NOI});
   if(now===cfgDaLuu)return;
   cfgDaLuu=now;
   day({op:'cfg',data:JSON.parse(now)});
-  capNhatNgay();
+  sauDoi();
 }
 function sauThaoTac(){luuCfg();try{localStorage.setItem('st-last',S.lastTien);}catch(e){}}
 function addLog(e){
@@ -1365,12 +1366,12 @@ function addLog(e){
   S.log.push(e);
   const body=JSON.parse(JSON.stringify(e));delete body.id;
   day({op:'ghi',id:e.id,data:body});
-  capNhatNgay();
+  sauDoi();
 }
 function delLog(id){
   S.log=S.log.filter(z=>z.id!==id);
   day({op:'xoa',id});
-  capNhatNgay();
+  sauDoi();
 }
 
 /* "Sổ app" tab as the owner sees it: readable columns win over the stored copy, so hand edits flow into the app;
@@ -1449,25 +1450,203 @@ async function tai(lanDau){
   const hen=lanDau?setTimeout(()=>{if(trangThai==='cho'){trangThai='cham';render();}},10000):0;
   try{
     await guiHang();
-    const r=await goi({op:'tai',tabs:[TAB_SO]});
+    const r=await goi({op:'tai',tabs:[TAB_SO,...TABS_CU]});
     clearTimeout(hen);
     const sig=JSON.stringify(r)+JSON.stringify(HANG);
-    if(sig===daTai&&trangThai==='san'){capNhatNgay();return;}
+    if(sig===daTai&&trangThai==='san'){sauDoi();return;}
     daTai=sig;DB=true;
     if(r.cfg){
       apCfg(r.cfg);CFG_DAU=r.cfg.dau||'';
-      S.log=r.tabs&&r.tabs[TAB_SO]?tronSo(r.tabs[TAB_SO]):(r.log||[]);
-      apHang();cfgDaLuu=JSON.stringify({acc:S.acc,dat:S.dat});trangThai='san';
+      cfgDaLuu=JSON.stringify({acc:S.acc,dat:S.dat,noi:NOI});
+      const coTab=r.tabs&&r.tabs[TAB_SO];
+      if(coTab)docTabCu(r.tabs);else TAB_CU=null;
+      S.log=coTab?tronSo(r.tabs[TAB_SO]):(r.log||[]);
+      apHang();trangThai='san';
+      soatChiTiet();
     }
     else trangThai='trong';
     render();
-    capNhatNgay();
+    sauDoi();
   }catch(e){
     clearTimeout(hen);
     if(e&&e.khoa){hetKhoa();return;}
     if(trangThai!=='san'){trangThai='cham';render();}
   }
 }
+/* ---------- The owner's own tabs: Chi tiết · Xây nhà · Vay · Đầu tư (Tổng quan follows them through its formulas) ----------
+   Rows the owner typed are read into the app; what the app records is written back: account balances into Chi tiết,
+   house spending/income into the Xây nhà lists, loan moves into a block beside the Vay table, land into Đầu tư.
+   Rows the app writes carry its Mã; those are kept in step with the app. */
+const T_CT='Chi tiết', T_XN='Xây nhà', T_VAY='Vay', T_DAU='Đầu tư', T_TQ='Tổng quan';
+const TABS_CU=[T_CT,T_XN,T_VAY,T_DAU,T_TQ];
+let TAB_CU=null, NOI={ct:{}}, VAY_T=0;
+const chu=v=>String(v??'').trim();
+const soO=v=>{if(typeof v==='number')return v;const s=chu(v);if(!s||s.startsWith('='))return null;const d=s.replace(/[^\d]/g,'');return d?(/^[-−]/.test(s)?-1:1)*parseInt(d,10):null;};
+const isoTuDmy=v=>{const m=chu(v).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);return m?m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'):null;};
+// write cells and keep the in-memory copy of the tab in step, so the next comparison sees it
+function viet(tab,r,c,values){
+  const t=TAB_CU[tab];
+  values.forEach((row,i)=>{const rr=r-1+i;while(t.length<=rr)t.push([]);const R=t[rr];row.forEach((v,j)=>{while(R.length<c-1+j)R.push('');R[c-1+j]=v;});});
+  day({op:'dat',tab,r,c,values});
+}
+const hangTrong=(tab,start,cols)=>{const t=TAB_CU[tab];for(let r=start;;r++){const R=t[r-1]||[];if(cols.every(j=>chu(R[j])===''))return r;}};
+const CT_TEN={'tien ngan hang':'nh','tien xay nha':'xn','cho vay':'@vay','dat':'@dat','tien mat':'tm'};
+function ctMap(ct){
+  const m=[];
+  ct.forEach((r,i)=>{
+    if(i<2)return;
+    const ma=chu(r[7]);let id=ma&&get(ma)?ma:null;
+    if(!id){const k=bo(chu(r[2])).trim();if(!k)return;id=CT_TEN[k]||(S.acc.find(a=>bo(a.ten).trim()===k||(ALIAS[a.id]||[]).includes(k)||(a.alias||[]).includes(k))||{}).id||null;}
+    if(id)m.push({row:i+1,id,f:r[5]});
+  });
+  return m;
+}
+const ctTuGhi=id=>!(id.startsWith('@')||id==='xn'||!get(id)); // formula rows (loans, house, land) come from their own tabs
+// Vay: the owner's table ends at its total row; the app's moves sit beside it in M:Q and the total adds them
+function vayTong(vy){
+  const khoi=vy.slice(1).reduce((s,r)=>s+(soO(r[13])||0),0);
+  let s=0;
+  for(let i=1;i<vy.length;i++){
+    const r=vy[i], b=soO(r[1]);
+    if(i>1&&!chu(r[0])&&b!=null&&(Math.abs(b-s)<1||Math.abs(b-s-khoi)<1))return i+1;
+    if(b!=null)s+=b;
+  }
+  return vy.length+1;
+}
+function docTabCu(tabs){
+  TAB_CU={};for(const n of TABS_CU)TAB_CU[n]=tabs[n]?tabs[n].map(r=>r.slice()):null;
+  const dt=TAB_CU[T_DAU];
+  if(dt){
+    S.dat=[];
+    dt.forEach((r,i)=>{if(!i)return;const ten=chu(r[0]),gia=soO(r[2]);if(!ten||gia==null)return;S.dat.push({ten,gia,giaHT:soO(r[3]),ngayMua:isoTuDmy(r[1]),_r:i+1});});
+  }
+  const xn=TAB_CU[T_XN], axn=get('xn');
+  if(xn&&axn){
+    const thu=[],chi=[];
+    xn.forEach((r,i)=>{
+      const row=i+1;
+      if(row>=4&&row<=19&&!chu(r[7])){const v=soO(r[1]);if(v!=null&&chu(r[0]))thu.push({t:chu(r[0]),v});}
+      if(row>=3&&row<=101&&!chu(r[4])){const v=soO(r[3]);if(v!=null&&chu(r[2]))chi.push({t:chu(r[2]),v});}
+    });
+    XN_THU=thu;XN_CHI=chi;NHA_DA_CHI=chi.reduce((s,x)=>s+x.v,0);
+    axn.so=thu.reduce((s,x)=>s+x.v,0)-NHA_DA_CHI;
+  }
+  const vy=TAB_CU[T_VAY];
+  if(vy){
+    const t=VAY_T=vayTong(vy), nhom=new Map();let cur=null;
+    for(let row=2;row<t;row++){
+      const r=vy[row-1]||[], ten=chu(r[0]), b=soO(r[1]);
+      if(ten){
+        cur=bo(ten).trim();if(!nhom.has(cur))nhom.set(cur,{ten,so:0,ngay:null,lai:null});
+        const g=nhom.get(cur);if(b!=null)g.so+=b;
+        const d=isoTuDmy(r[2]);if(d&&(!g.ngay||d<g.ngay))g.ngay=d;
+        const l=soO(r[3]);if(l!=null&&g.lai==null)g.lai=l;
+      }else if(cur&&b!=null)nhom.get(cur).so+=b;
+    }
+    const vays=S.acc.filter(a=>a.nhom==='vay');
+    for(const a of vays)a.so=0;
+    for(const [k,g] of nhom){
+      let a=vays.find(x=>bo(x.ten).trim()===k)||vays.find(x=>(x.alias||[]).includes(k));
+      if(!a){a={id:'v'+uid(),ten:g.ten,nhom:'vay',so:0};S.acc.push(a);vays.push(a);}
+      a.so=g.so;if(g.ngay)a.ngayVay=g.ngay;if(g.lai!=null)a.lai=g.lai;
+    }
+  }
+}
+// a balance the owner changed by hand in Chi tiết becomes an adjustment entry, so the app lands on the same number
+function soatChiTiet(){
+  const ct=TAB_CU&&TAB_CU[T_CT];if(!ct)return;
+  for(const {id,f} of ctMap(ct)){
+    if(!ctTuGhi(id))continue;
+    const s=soO(f), w=NOI.ct[id];
+    if(s==null||w==null||s===w)continue;
+    const A=bal(id);
+    if(s!==A)addLog({id:nid(),loai:'chinh',ngay:isoToday(),acc:id,chenh:s-A,ghichu:'Sửa trên sheet',ts:Date.now()});
+    NOI.ct[id]=s;
+  }
+}
+function ghiTabCu(){
+  if(!TAB_CU||trangThai!=='san')return;
+  const noiTruoc=JSON.stringify(NOI);
+  // Chi tiết: the app's own accounts, one row each, Còn lại = balance
+  const ct=TAB_CU[T_CT];
+  if(ct){
+    if(chu((ct[1]||[])[7])!=='Mã')viet(T_CT,2,8,[['Mã']]);
+    const m=ctMap(ct), co=new Set(m.map(x=>x.id));
+    for(const {row,id,f} of m){
+      if(!ctTuGhi(id))continue;
+      const A=bal(id);
+      if(soO(f)!==A)viet(T_CT,row,6,[[A]]);
+      if(chu((ct[row-1]||[])[7])!==id)viet(T_CT,row,8,[[id]]);
+      NOI.ct[id]=A;
+    }
+    for(const a of S.acc.filter(a=>(a.nhom==='tien'||(a.nhom==='no'&&a.id!=='xn'))&&!co.has(a.id))){
+      const A=bal(a.id);
+      viet(T_CT,ct.length+1,1,[['',a.id==='tm'?'Tiền mặt':a.nhom==='tien'?'Bank':a.the?'Tín dụng':'Công nợ',a.ten,'','',A,'',a.id]]);
+      NOI.ct[a.id]=A;
+    }
+  }
+  // Tổng quan: Tín dụng had no formula; give it the same one as its neighbours
+  const tq=TAB_CU[T_TQ];
+  if(tq){const i=tq.findIndex(r=>chu(r[0])==='Tín dụng');if(i>=0&&chu(tq[i][1])==='')viet(T_TQ,i+1,2,[[`=SUMIF('Chi tiết'!B:B,A${i+1},'Chi tiết'!F:F)`]]);}
+  // Xây nhà: spending goes into the Chi list (C:D, Mã in E), income into the Thu list (A:B, Mã in H)
+  const xn=TAB_CU[T_XN];
+  if(xn){
+    const muon=new Map();
+    for(const e of S.log){
+      if(e.loai==='chuyen'&&e.toi==='xn')muon.set(e.id,{k:'chi',t:e.ghichu||'Xây nhà',v:e.tien});
+      else if(e.loai==='chinh'&&e.acc==='xn'&&e.chenh)muon.set(e.id,e.chenh>0?{k:'thu',t:e.ghichu||'Lần tiếp theo',v:e.chenh}:{k:'chi',t:e.ghichu||'Xây nhà',v:-e.chenh});
+    }
+    const co=new Map();
+    xn.forEach((r,i)=>{if(chu(r[4]))co.set(chu(r[4]),{k:'chi',row:i+1,t:chu(r[2]),v:soO(r[3])});if(chu(r[7]))co.set(chu(r[7]),{k:'thu',row:i+1,t:chu(r[0]),v:soO(r[1])});});
+    for(const [id,x] of co){
+      const w=muon.get(id);
+      if(!w||w.k!==x.k){if(x.k==='chi')viet(T_XN,x.row,3,[['','','']]);else{viet(T_XN,x.row,1,[['','']]);viet(T_XN,x.row,8,[['']]);}co.delete(id);continue;}
+      if(w.t!==x.t||w.v!==x.v)viet(T_XN,x.row,x.k==='chi'?3:1,[[w.t,w.v]]);
+    }
+    for(const [id,w] of muon){
+      if(co.has(id))continue;
+      if(w.k==='chi')viet(T_XN,hangTrong(T_XN,3,[2,3,4]),3,[[w.t,w.v,id]]);
+      else{const r=hangTrong(T_XN,4,[0,1,7]);viet(T_XN,r,1,[[w.t,w.v]]);viet(T_XN,r,8,[[id]]);}
+    }
+  }
+  // Vay: every move of a loan account, in date order, beside the owner's table; the total row adds them
+  const vy=TAB_CU[T_VAY];
+  if(vy){
+    const vays=new Set(S.acc.filter(a=>a.nhom==='vay').map(a=>a.id)), dong=[];
+    for(const e of [...S.log].sort((a,b)=>(a.ngay||'').localeCompare(b.ngay||'')||(a.ts||0)-(b.ts||0))){
+      let id=null,v=0;
+      if(e.loai==='chuyen'){if(vays.has(e.toi)){id=e.toi;v=e.tien;}else if(vays.has(e.tu)){id=e.tu;v=-e.tien;}}
+      else if(vays.has(e.acc)){id=e.acc;v=e.chenh;}
+      if(id)dong.push([get(id).ten,v,dmy(e.ngay),e.ghichu||VIEC_TEN[e.viec]||'',e.id]);
+    }
+    const o=i=>Array.from({length:5},(_,j)=>chu((vy[i]||[])[12+j]));
+    let n=0;for(let i=0;i<vy.length;i++)if(o(i).some(x=>x!==''))n=i+1;   // rows the block takes now
+    const want=dong.length||n?[['Từ app','Tiền','Ngày','Ghi chú','Mã'],...dong]:[];
+    const giong=n===want.length&&want.every((r,i)=>JSON.stringify(r.map(chu))===JSON.stringify(o(i)));
+    if(!giong){
+      const t=VAY_T;
+      viet(T_VAY,1,13,[...want,...Array.from({length:Math.max(0,n-want.length)},()=>['','','','',''])]);
+      viet(T_VAY,t,2,[[`=SUM(B2:B${t-1})+SUM(N2:N500)`]]);
+    }
+  }
+  // Đầu tư: the land list is the tab; new land goes into the first empty row, removed land is cleared
+  const dt=TAB_CU[T_DAU];
+  if(dt){
+    const giu=new Set();
+    for(const d of S.dat){
+      const want=[d.ten,d.ngayMua?dmy(d.ngayMua):'',d.gia,d.giaHT??''];
+      if(d._r){
+        giu.add(d._r);const R=dt[d._r-1]||[];
+        if(chu(R[0])!==d.ten||soO(R[2])!==d.gia||(soO(R[3])??null)!==(d.giaHT??null))viet(T_DAU,d._r,1,[[d.ten,chu(R[1])||want[1],d.gia,d.giaHT??'']]);
+      }else{d._r=hangTrong(T_DAU,2,[0,1,2,3]);giu.add(d._r);viet(T_DAU,d._r,1,[want]);}
+    }
+    dt.forEach((R,i)=>{if(i&&!giu.has(i+1)&&chu(R[0])&&soO(R[2])!=null)viet(T_DAU,i+1,1,[['','','','']]);});
+    if(S.dat.some(d=>d._r>3)&&!NOI.dauH2){viet(T_DAU,2,8,[['=SUM(C2:C200)']]);NOI.dauH2=true;}
+  }
+  if(JSON.stringify(NOI)!==noiTruoc)luuCfg();
+}
+function sauDoi(){capNhatNgay();ghiTabCu();}
+
 document.addEventListener('submit',ev=>{
   if(ev.target.id!=='fKhoa')return;
   ev.preventDefault();
