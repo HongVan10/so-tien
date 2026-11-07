@@ -306,6 +306,7 @@ table.sk{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
 .eff i{font-style:normal;color:var(--muted);padding:0 5px}
 .eff b{font-weight:700}
 .acts{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:2px}
+.acts.ba{grid-template-columns:1fr 1fr 1fr}
 .btn{height:52px;border-radius:14px;font-weight:700;font-size:16px}
 .btn.pri{background:var(--accent);color:var(--accent-ink)}
 .btn.pri:disabled{opacity:.35;cursor:default}
@@ -825,7 +826,7 @@ function openAcc(id){
   const a=get(id), T=totals(), b=T.b[id], isNo=a.nhom==='no';
   sheet.innerHTML=`<div class="sh-h"><h2>${esc(a.ten)}</h2><span class="tag">${NHOM[a.nhom]}</span></div>
     <div class="big">${fmt(b)}</div>
-    ${a.nhom==='vay'?`<div class="mini">${saoKe(a)}</div>`:''}
+    ${a.nhom==='vay'?`<div class="sk-acts"><button type="button" class="lnk" id="aLai">${a.lai?'Lãi '+shortU(a.lai)+'/ngày/100tr':'Đặt lãi'}</button></div><div class="mini">${saoKe(a)}</div>`:''}
     <div class="fld"><label for="aMoi">${isNo?'Còn nợ mới':'Số dư mới'}</label>${amtInput('aMoi')}<div class="amt-val" id="aMoiV"></div></div>
     <div class="eff" id="aEff" hidden></div>
     <div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="aLuu" disabled>Lưu</button></div>`;
@@ -840,6 +841,7 @@ function openAcc(id){
     eff.hidden=false;
   };
   $('#aMoi').addEventListener('input',upd);
+  if(a.nhom==='vay')$('#aLai').addEventListener('click',()=>suaLai(a));
   $('#aLuu').addEventListener('click',()=>{
     const v=parseTien($('#aMoi').value);
     if(!Number.isFinite(v)||v===b)return;
@@ -865,7 +867,8 @@ function openLog(id){
   sheet.innerHTML=`<div class="sh-h"><h2>${esc(m.t)}</h2></div>
     <div class="big">${e.loai==='chuyen'?fmt(e.tien):fmtS(e.chenh)}</div>${m.s?`<div class="note">${esc(m.s)}</div>`:''}
     <div class="kvs"><div class="kv"><span>Ngày</span><b>${dmy(e.ngay)}</b></div>${e.ghichu?`<div class="kv"><span>Ghi chú</span><b>${esc(e.ghichu)}</b></div>`:''}${x?`<div class="kv"><span>Tổng</span><b class="${cls(x)}">${fmtS(x)}</b></div>`:''}</div>
-    <div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn warn" id="dXoa">Xoá</button></div>`;
+    <div class="acts ba"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="dSua">Sửa</button><button type="button" class="btn warn" id="dXoa">Xoá</button></div>`;
+  $('#dSua').addEventListener('click',()=>suaDong(e));
   let armed=false;
   $('#dXoa').addEventListener('click',()=>{
     const btn=$('#dXoa');
@@ -874,6 +877,37 @@ function openLog(id){
     delLog(id);closeSheet();render();toast('Đã xoá');
   });
   showSheet();
+}
+/* Edit a recorded entry in place: amount, money account(s), note, date. It keeps its Mã, so the sheet row is rewritten. */
+function suaDong(e){
+  const chinh=e.loai==='chinh', laTien=id=>!!(get(id)&&get(id).nhom==='tien');
+  const coTu=!chinh&&laTien(e.tu), coToi=!chinh&&laTien(e.toi);
+  const dat=e.viec==='muadat'?S.dat.find(d=>d.ten===e.ghichu&&d.gia===e.tien):null;
+  moForm({title:'Sửa · '+esc(moTa(e).t),st:{tu:coTu?e.tu:null,toi:coToi?e.toi:null},f:[
+    {t:'tien',id:'feTien',lbl:chinh?'Chênh lệch':'Số tiền',val:fmt(chinh?Math.abs(e.chenh):e.tien)},
+    ...(coTu?[{t:'chips',k:'tu',lbl:'Từ',list:()=>tienL()}]:[]),
+    ...(coToi?[{t:'chips',k:'toi',lbl:'Vào',list:()=>tienL()}]:[]),
+    {t:'text',id:'feGhi',lbl:'Ghi chú',val:e.ghichu||''},
+    {t:'date',id:'feNgay',lbl:'Ngày',val:e.ngay}
+  ],
+  ok:(st,v)=>v.feTien>0&&(!coTu||!!st.tu)&&(!coToi||!!st.toi)&&!(coTu&&coToi&&st.tu===st.toi),
+  save:(st,v)=>{
+    if(chinh)e.chenh=(e.chenh<0?-1:1)*v.feTien;else e.tien=v.feTien;
+    if(coTu)e.tu=st.tu;
+    if(coToi)e.toi=st.toi;
+    if(v.feGhi||!dat)e.ghichu=v.feGhi;
+    e.ngay=v.feNgay;
+    if(dat){dat.ten=e.ghichu;dat.gia=e.tien;}
+    suaLog(e);
+  }});
+}
+/* A loan's interest rate (per day per 100tr); interest is worked out again from the loan date at the new rate */
+function suaLai(a){
+  const cu=String(a.lai||0), list=LAI.some(x=>x.id===cu)?LAI:[...LAI,{id:cu,ten:shortU(+cu)}];
+  moForm({title:'Lãi · '+esc(a.ten),st:{lai:cu},f:[{t:'chips',k:'lai',lbl:'Lãi/ngày/100tr',list:()=>list}],
+  ok:st=>!!st.lai&&st.lai!==cu,
+  save:st=>{const v=+st.lai;if(v)a.lai=v;else delete a.lai;ghiLaiVay(a);}
+  });
 }
 
 function openDat(i){
@@ -898,7 +932,7 @@ function moForm(c){
     if(x.t==='seg')return `<div class="segf"></div>`;
     if(x.t==='chips')return `<span class="lbl"></span><div class="chips"></div>`;
     if(x.t==='tien')return `<label for="${x.id}">${x.lbl}</label>${amtInput(x.id,x.val)}<div class="amt-val" id="${x.id}V"></div>`;
-    if(x.t==='date')return `<label for="${x.id}">${x.lbl}</label><input type="date" id="${x.id}" value="${isoToday()}">`;
+    if(x.t==='date')return `<label for="${x.id}">${x.lbl}</label><input type="date" id="${x.id}" value="${x.val||isoToday()}">`;
     return `<label for="${x.id}">${x.lbl}</label><input id="${x.id}" autocomplete="off" enterkeyhint="done"${x.t==='so'?' inputmode="numeric"':''} value="${x.val!=null?esc(String(x.val)):''}">`;
   };
   sheet.innerHTML=`<div class="sh-h"><h2>${c.title}</h2></div>`
@@ -1289,6 +1323,21 @@ document.querySelector('.wrap').addEventListener('click',e=>{
   const ad=e.target.closest('[data-add]');if(ad){openAdd(ad.dataset.add);return;}
   const lg=e.target.closest('[data-log]');if(lg)openLog(lg.dataset.log);
 });
+/* iOS 26: after the keyboard closes the screen can stay shifted, leaving the tab bar floating mid-screen.
+   Once typing has ended, scroll one pixel and back so the browser lines the page up again. */
+(()=>{
+  let hen=0;
+  const go=el=>!!el&&/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+  const nan=()=>{
+    if(go(document.activeElement))return;
+    const x=window.scrollX,y=window.scrollY;
+    window.scrollTo(x,y>0?y-1:y+1);
+    requestAnimationFrame(()=>window.scrollTo(x,y));
+  };
+  const hoan=()=>{clearTimeout(hen);hen=setTimeout(nan,400);};
+  document.addEventListener('focusout',hoan);
+  if(window.visualViewport)window.visualViewport.addEventListener('resize',hoan);
+})();
 
 
 /* ---------- Saving: the "Tracking Money" sheet through its Apps Script. Every write waits in an on-device
@@ -1372,6 +1421,12 @@ function addLog(e){
 function delLog(id){
   S.log=S.log.filter(z=>z.id!==id);
   day({op:'xoa',id});
+  sauDoi();
+}
+// an edited entry keeps its Mã: the same row in "Sổ app" is rewritten, the owner's tabs follow in ghiTabCu
+function suaLog(e){
+  const body=JSON.parse(JSON.stringify(e));delete body.id;
+  day({op:'ghi',id:e.id,data:body});
   sauDoi();
 }
 
@@ -1482,7 +1537,7 @@ async function tai(lanDau){
    Rows the app writes carry its Mã; those are kept in step with the app. */
 const T_CT='Chi tiết', T_XN='Xây nhà', T_VAY='Vay', T_DAU='Đầu tư', T_TQ='Tổng quan';
 const TABS_CU=[T_CT,T_XN,T_VAY,T_DAU,T_TQ];
-let TAB_CU=null, NOI={ct:{}}, VAY_T=0;
+let TAB_CU=null, NOI={ct:{}}, VAY_T=0, VAY_DONG=new Map(); // loan id → the Vay row holding its rate (column D)
 const chu=v=>String(v??'').trim();
 const soO=v=>{if(typeof v==='number')return v;const s=chu(v);if(!s||s.startsWith('='))return null;const d=s.replace(/[^\d]/g,'');return d?(/^[-−]/.test(s)?-1:1)*parseInt(d,10):null;};
 const isoTuDmy=v=>{const m=chu(v).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);return m?m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'):null;};
@@ -1540,18 +1595,20 @@ function docTabCu(tabs){
     for(let row=2;row<t;row++){
       const r=vy[row-1]||[], ten=chu(r[0]), b=soO(r[1]);
       if(ten){
-        cur=bo(ten).trim();if(!nhom.has(cur))nhom.set(cur,{ten,so:0,ngay:null,lai:null});
+        cur=bo(ten).trim();if(!nhom.has(cur))nhom.set(cur,{ten,so:0,ngay:null,lai:null,dong:row});
         const g=nhom.get(cur);if(b!=null)g.so+=b;
         const d=isoTuDmy(r[2]);if(d&&(!g.ngay||d<g.ngay))g.ngay=d;
-        const l=soO(r[3]);if(l!=null&&g.lai==null)g.lai=l;
+        const l=soO(r[3]);if(l!=null&&g.lai==null){g.lai=l;g.dong=row;}
       }else if(cur&&b!=null)nhom.get(cur).so+=b;
     }
     const vays=S.acc.filter(a=>a.nhom==='vay');
     for(const a of vays)a.so=0;
+    VAY_DONG=new Map();
     for(const [k,g] of nhom){
       let a=vays.find(x=>bo(x.ten).trim()===k)||vays.find(x=>(x.alias||[]).includes(k));
       if(!a){a={id:'v'+uid(),ten:g.ten,nhom:'vay',so:0};S.acc.push(a);vays.push(a);}
       a.so=g.so;if(g.ngay)a.ngayVay=g.ngay;if(g.lai!=null)a.lai=g.lai;
+      VAY_DONG.set(a.id,g.dong);
     }
   }
 }
@@ -1649,6 +1706,8 @@ function ghiTabCu(){
   if(JSON.stringify(NOI)!==noiTruoc)luuCfg();
 }
 function sauDoi(){capNhatNgay();ghiTabCu();}
+// a loan the owner keeps in the Vay table reads its rate from column D there, so a new rate is written there too
+function ghiLaiVay(a){const r=TAB_CU&&TAB_CU[T_VAY]&&VAY_DONG.get(a.id);if(r)viet(T_VAY,r,4,[[a.lai||'']]);}
 
 document.addEventListener('submit',ev=>{
   if(ev.target.id!=='fKhoa')return;
