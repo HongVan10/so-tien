@@ -19,6 +19,13 @@
 <style>
 html,body{margin:0}[hidden]{display:none!important}
 .khoa{display:grid;gap:14px;padding:36px 2px}
+.hero-sub{font-size:14px;font-weight:600;color:var(--hero-muted);margin-top:4px}
+.hero-sub b{font-weight:700;font-variant-numeric:tabular-nums}
+.ngay-r{display:grid;grid-template-columns:minmax(0,1fr) auto 96px;gap:10px;align-items:baseline;padding:11px 14px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.card.ngay>.ngay-r:last-child{border-bottom:0}
+.ngay-r span{font-size:14px;color:var(--muted);font-weight:600}
+.ngay-r b{font-weight:700}
+.ngay-r small{text-align:right;font-weight:600;font-size:13px;white-space:nowrap}
 .cho .lnk{display:block;margin:12px auto 0}
 /* Layout: one passbook-width column — verdict number on top, Có vs Nợ bars on one scale, every account below; a one-line "gõ tắt" bar docked at the bottom reads each sentence back before saving */
 :root{
@@ -510,20 +517,35 @@ function barsHTML(T){
 }
 /* ---------- Tab: Tổng quan ---------- */
 function vTong(T){
+  const NG=bangNgay();
   const sumN=f=>S.acc.filter(f).reduce((s,a)=>s+T.b[a.id],0);
   const go=(v,c,t,n)=>`<button type="button" class="item go" data-go="${v}"><i class="sw" style="background:${c}"></i><span class="nm">${t}</span><span class="v ${n===0?'zero':''}">${fmt(n)}</span><span class="chev">›</span></button>`;
   return `<section class="hero">
       <span class="hero-lbl">Tổng tài sản thực</span>
       <div class="hero-num ${cls(T.xoay)}">${fmtS(T.xoay)}</div>
+      ${homQuaHTML(NG)}
     </section>
     ${nhacHTML(T)}
     <section class="card bars">${barsHTML(T)}</section>
+    ${ngayHTML(NG)}
     ${thangHTML()}
     <section class="sec"><div class="sec-h"><span>Có</span><b>${fmt(T.co)}</b></div><div class="card">${go('tien','var(--c-tien)','Tiền',sumN(a=>a.nhom==='tien'))}${go('vay','var(--c-vay)','Cho vay',sumN(a=>a.nhom==='vay'))}</div></section>
     <section class="sec"><div class="sec-h"><span>Nợ</span><b>${fmt(T.no)}</b></div><div class="card">${go('no','var(--c-no)','Công nợ',sumN(a=>a.nhom==='no'&&a.id!=='xn'))}${go('xay','var(--c-xay)','Xây nhà',T.b.xn)}</div></section>
     <section class="sec"><div class="sec-h"><span>Tài sản</span><b>${fmt(T.dat+T.nha)}</b></div><div class="card">${go('dau','var(--c-dau)','Đất',T.dat)}${go('xay','var(--c-xay)','Nhà',T.nha)}</div></section>`;
 }
 
+/* ---------- Tổng quan · Theo ngày: total at the end of each day and the change from the day before ---------- */
+function homQuaHTML(NG){
+  const n=NG.length;if(!n)return '';
+  const dt=n>1?NG[n-1].tong-NG[n-2].tong:0;
+  return `<div class="hero-sub">So với hôm qua <b class="${cls(dt)}">${fmtS(dt)}</b></div>`;
+}
+function ngayHTML(NG){
+  if(!NG.length)return '';
+  const rows=NG.map((x,i)=>({x,dt:i?x.tong-NG[i-1].tong:0})).slice(-7).reverse()
+    .map(({x,dt})=>`<div class="ngay-r"><span>${dayLabel(x.ngay)}</span><b class="${cls(x.tong)}">${fmtS(x.tong)}</b><small class="${cls(dt)}">${fmtS(dt)}</small></div>`).join('');
+  return `<section class="sec"><div class="sec-h"><span>Theo ngày</span></div><div class="card ngay">${rows}</div></section>`;
+}
 /* ---------- Tổng quan · Theo tháng: spending (and income) per month ---------- */
 function thangHTML(){
   const all=chiAll(), vaoE=S.log.filter(e=>e.loai==='chuyen'&&e.viec==='vao'), mNow=isoToday().slice(0,7);
@@ -1284,6 +1306,7 @@ async function goi(op){
     const r=await fetch(SO_URL,{method:'POST',body:JSON.stringify(Object.assign({k:KHOA},op)),signal:ac.signal});
     const j=await r.json();
     if(j&&j.loi==='khoa')throw {khoa:true};
+    if(j&&j.loi==='op')return j; // an older Apps Script without this operation: skip it, never block the queue
     if(!j||j.loi)throw new Error(j&&j.loi||'loi');
     return j;
   }finally{clearTimeout(t);}
@@ -1292,14 +1315,22 @@ function hetKhoa(){
   KHOA='';try{localStorage.removeItem('st-khoa');}catch(e){}
   trangThai='khoa';render();toast('Sai mã sổ');
 }
-let dangGui=null;
+let dangGui=null, dangOp=null;
 function guiHang(){
   if(dangGui)return dangGui;
   // cleared in .finally (always async), never inside the body: with an empty queue the body finishes
   // synchronously, before dangGui is assigned, and would leave a stale promise blocking every later send
   const p=(async()=>{
-    try{while(HANG.length&&KHOA){await goi(HANG[0]);HANG.shift();luuHang();}}
+    try{
+      while(HANG.length&&KHOA){
+        const op=HANG[0];dangOp=op;
+        const j=await goi(op);
+        if(j&&j.loi==='op'&&op.tab===TAB_NGAY){try{localStorage.removeItem('st-ngay');}catch(e){}}
+        HANG=HANG.filter(x=>x!==op);luuHang();
+      }
+    }
     catch(e){if(e&&e.khoa)hetKhoa();else toast('Chưa lưu lên sheet, sẽ thử lại');}
+    finally{dangOp=null;}
   })();
   dangGui=p;
   p.finally(()=>{if(dangGui===p)dangGui=null;});
@@ -1326,6 +1357,7 @@ function luuCfg(){
   if(now===cfgDaLuu)return;
   cfgDaLuu=now;
   day({op:'cfg',data:JSON.parse(now)});
+  capNhatNgay();
 }
 function sauThaoTac(){luuCfg();try{localStorage.setItem('st-last',S.lastTien);}catch(e){}}
 function addLog(e){
@@ -1333,24 +1365,103 @@ function addLog(e){
   S.log.push(e);
   const body=JSON.parse(JSON.stringify(e));delete body.id;
   day({op:'ghi',id:e.id,data:body});
+  capNhatNgay();
 }
 function delLog(id){
   S.log=S.log.filter(z=>z.id!==id);
   day({op:'xoa',id});
+  capNhatNgay();
+}
+
+/* "Sổ app" tab as the owner sees it: readable columns win over the stored copy, so hand edits flow into the app;
+   a row typed by hand (no Mã) becomes an entry and gets its Mã written back. */
+const TAB_SO='Sổ app', TAB_NGAY='Theo ngày';
+const VIEC_TEN={xai:'Xài',vao:'Tiền vào',chovay:'Cho vay',thuno:'Thu nợ',trano:'Trả nợ',vaythem:'Vay thêm',chuyen:'Chuyển',xaynha:'Xây nhà',thulai:'Thu lãi',tralai:'Trả lãi',muadat:'Mua đất'};
+function tronSo(rows){
+  if(!rows||rows.length<2)return [];
+  const tenId=new Map([['ngoai vao','thu'],['xai ra','chi']]);
+  for(const a of S.acc){tenId.set(bo(a.ten).trim(),a.id);tenId.set(a.id,a.id);}
+  const viecId=new Map(Object.entries(VIEC_TEN).map(([k,v])=>[bo(v),k]));
+  const maId=v=>{const k=bo(String(v??'')).trim();return k?(tenId.get(k)||null):null;};
+  const so=v=>{if(typeof v==='number')return Math.round(v);const s=String(v??'').trim();if(!s)return null;const d=s.replace(/[^\d]/g,'');return d?(/^[-−]/.test(s)?-1:1)*parseInt(d,10):null;};
+  const ngay=v=>{const m=String(v??'').trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);if(!m)return null;return (m[3]||isoToday().slice(0,4))+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');};
+  const out=[];
+  rows.slice(1).forEach((r,i)=>{
+    let e={};try{if(r[7])e=JSON.parse(r[7]);}catch(x){e={};}
+    const ma=String(r[6]??'').trim(), moi=!ma;
+    const d=ngay(r[0]);if(d)e.ngay=d;
+    const t=so(r[1]), vt=bo(String(r[2]??'')).trim();
+    if(vt==='chinh so du'){e.loai='chinh';if(t!=null)e.chenh=t;const a=maId(r[4]);if(a)e.acc=a;}
+    else{
+      e.loai='chuyen';
+      const v=viecId.get(vt);if(v)e.viec=v;
+      if(t!=null)e.tien=Math.abs(t);
+      const tu=maId(r[3]),toi=maId(r[4]);if(tu)e.tu=tu;if(toi)e.toi=toi;
+      if(!e.tu&&e.viec==='vao')e.tu='thu';
+      if(!e.toi&&e.viec==='xai')e.toi='chi';
+      if(!e.toi&&e.viec==='xaynha')e.toi='xn';
+    }
+    e.ghichu=String(r[5]??'');
+    if(moi&&e.viec==='xai'&&!e.nhom)e.nhom=doanLoai(e.ghichu);
+    const ok=e.ngay&&(e.loai==='chinh'?(e.acc&&Number.isFinite(e.chenh)):(e.tien>0&&e.tu&&e.toi));
+    if(!ok)return;
+    if(moi){e.id='h'+uid();e.ts=Date.now();day({op:'dat',tab:TAB_SO,r:i+2,c:7,values:[[e.id,JSON.stringify(e)]]});}
+    else e.id=ma;
+    out.push(e);
+  });
+  return out;
+}
+
+/* Day by day, like the owner's "Test" tab: every group's total at the end of each day, and the change from the day before */
+const ngaySau=iso=>{const [y,m,d]=iso.split('-').map(Number);return isoNgay(new Date(y,m-1,d+1));};
+let CFG_DAU='';
+function bangNgay(){
+  const keep=S.log, homnay=isoToday();
+  let d=keep.reduce((m,e)=>e.ngay&&e.ngay<m?e.ngay:m,CFG_DAU||homnay);
+  const out=[];
+  try{
+    for(let k=0;d<=homnay&&k<800;k++,d=ngaySau(d)){
+      const den=d;S.log=keep.filter(e=>e.ngay<=den);
+      const T=totals(), sum=f=>S.acc.filter(f).reduce((s,a)=>s+T.b[a.id],0);
+      out.push({ngay:d,tm:sum(a=>a.id==='tm'),bank:sum(a=>a.nhom==='tien'&&a.id!=='tm'),vay:sum(a=>a.nhom==='vay'),no:sum(a=>a.nhom==='no'&&!a.the),td:sum(a=>!!a.the),dat:T.dat,tong:T.xoay});
+    }
+  }finally{S.log=keep;}
+  return out;
+}
+const cot=n=>{let s='';while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;};
+function capNhatNgay(){
+  if(trangThai!=='san')return;
+  const NG=bangNgay(), dong=(ten,k)=>[ten,...NG.map(x=>x[k])];
+  const v=[['Category',...NG.map(x=>x.ngay.slice(8)+'/'+x.ngay.slice(5,7))],
+    dong('Tiền mặt','tm'),dong('Bank','bank'),dong('Cho vay','vay'),dong('Công nợ','no'),dong('Đầu tư','dat'),dong('Tín dụng','td'),
+    dong('Tổng tài sản thực','tong'),['So với hôm trước',...NG.map((x,i)=>i?x.tong-NG[i-1].tong:'')]];
+  const sig=JSON.stringify(v);
+  let cu='';try{cu=localStorage.getItem('st-ngay')||'';}catch(e){}
+  if(sig===cu)return;
+  try{localStorage.setItem('st-ngay',sig);}catch(e){}
+  const C=cot(NG.length+1);
+  HANG=HANG.filter(o=>o===dangOp||!(o.op==='dat'&&o.tab===TAB_NGAY));
+  day({op:'dat',tab:TAB_NGAY,xoa:true,values:v,dong:{hang:1,cot:1},
+    kieu:[{a1:'A1:'+C+'1',so:'@',dam:true},{a1:'B2:'+C+'9',so:'#,##0;[Red]-#,##0'},{a1:'A2:A9',dam:true},{a1:'A8:'+C+'8',dam:true,nen:'#d9ead3'}]});
 }
 async function tai(lanDau){
   if(!KHOA){trangThai='khoa';render();return;}
   const hen=lanDau?setTimeout(()=>{if(trangThai==='cho'){trangThai='cham';render();}},10000):0;
   try{
     await guiHang();
-    const r=await goi({op:'tai'});
+    const r=await goi({op:'tai',tabs:[TAB_SO]});
     clearTimeout(hen);
     const sig=JSON.stringify(r)+JSON.stringify(HANG);
-    if(sig===daTai&&trangThai==='san')return;
+    if(sig===daTai&&trangThai==='san'){capNhatNgay();return;}
     daTai=sig;DB=true;
-    if(r.cfg){apCfg(r.cfg);S.log=r.log||[];apHang();cfgDaLuu=JSON.stringify({acc:S.acc,dat:S.dat});trangThai='san';}
+    if(r.cfg){
+      apCfg(r.cfg);CFG_DAU=r.cfg.dau||'';
+      S.log=r.tabs&&r.tabs[TAB_SO]?tronSo(r.tabs[TAB_SO]):(r.log||[]);
+      apHang();cfgDaLuu=JSON.stringify({acc:S.acc,dat:S.dat});trangThai='san';
+    }
     else trangThai='trong';
     render();
+    capNhatNgay();
   }catch(e){
     clearTimeout(hen);
     if(e&&e.khoa){hetKhoa();return;}
@@ -1367,6 +1478,8 @@ document.addEventListener('submit',ev=>{
 document.addEventListener('click',ev=>{if(ev.target.closest('[data-mo-lai]')){trangThai='cho';render();tai(true);}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&KHOA)tai(trangThai!=='san');});
 addEventListener('online',()=>{if(KHOA)tai(trangThai!=='san');});
+// while the app stays open, pick up what the other device or a hand edit in the sheet changed
+setInterval(()=>{if(!document.hidden&&KHOA&&trangThai==='san'&&!HANG.length&&!dangGui)tai(false);},30000);
 
 render();
 tai(true);
