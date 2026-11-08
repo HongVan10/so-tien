@@ -277,11 +277,13 @@ table.sk{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
 .pill.moi{background:transparent;border:1.5px dashed var(--accent);color:var(--accent)}
 .pill.mo{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
 .pick{display:flex;flex-wrap:wrap;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
-.bar-in{display:flex;gap:8px}
+.bar-in{display:flex;gap:8px;min-width:0}
 .bar-in input{flex:1;min-width:0;height:52px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface-2);padding:0 14px;font-size:17px}
 .bar-in input:focus{outline:none;border-color:var(--accent)}
 .bar-in button{height:52px;padding:0 20px;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:16px}
 .bar-in button:disabled{opacity:.35;cursor:default}
+.bar-in .chup{flex:none;width:52px;height:52px;border-radius:14px;display:grid;place-items:center;background:var(--surface-2);border:1.5px solid var(--line);color:var(--ink);cursor:pointer}
+.bar-in .chup svg{width:24px;height:24px}
 
 .chip{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:15px;font-weight:500}
 .chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -417,6 +419,8 @@ table.sk{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
 <div class="dock" id="dock"><div class="dock-in">
   <div class="doc" id="doc" hidden></div>
   <div class="bar-in">
+    <label class="chup" for="anhIn" aria-label="Chụp ảnh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></label>
+    <input type="file" id="anhIn" accept="image/*" hidden>
     <input id="cau" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="vd: ăn sáng 50k">
     <button type="button" id="luu" disabled>Lưu</button>
   </div>
@@ -1079,16 +1083,17 @@ function themVay(){
     addLog(vanTat({viec:'chovay',ngay:v.fvNgay,tu:st.tu,toi:id,tien:v.fvTien}));S.lastTien=st.tu;
   }});
 }
-function themTien(){
-  const tk=S.selTien;
-  moForm({title:'Tiền',st:{loai:'xai',tk,tu:tk,sang:null},f:[
+function themTien(g){
+  g=g||{};
+  const tk=g.tk||S.selTien;
+  moForm({title:'Tiền',st:{loai:g.loai||'xai',tk,tu:tk,sang:null},f:[
     {t:'seg',k:'loai',opts:[['xai','Xài'],['vao','Tiền vào'],['chuyen','Chuyển']]},
-    {t:'tien',id:'ftTien',lbl:'Số tiền'},
+    {t:'tien',id:'ftTien',lbl:'Số tiền',val:g.tien?fmt(g.tien):''},
     {t:'chips',k:'tk',lbl:st=>st.loai==='xai'?'Trả bằng':'Vào',list:st=>st.loai==='xai'?[...tienL(),...S.acc.filter(a=>a.the)]:tienL(),show:st=>st.loai!=='chuyen'},
     {t:'chips',k:'tu',lbl:'Từ',list:()=>tienL(),show:st=>st.loai==='chuyen'},
     {t:'chips',k:'sang',lbl:'Sang',list:st=>tienL().filter(a=>a.id!==st.tu),show:st=>st.loai==='chuyen'},
-    {t:'text',id:'ftGhi',lbl:'Nội dung'},
-    {t:'date',id:'ftNgay',lbl:'Ngày'}
+    {t:'text',id:'ftGhi',lbl:'Nội dung',val:g.ghi||''},
+    {t:'date',id:'ftNgay',lbl:'Ngày',val:g.ngay}
   ],
   ok:(st,v)=>v.ftTien>0&&(st.loai==='chuyen'?(!!st.tu&&!!st.sang):!!st.tk),
   save:(st,v)=>{
@@ -1125,13 +1130,14 @@ function themDau(){
     addLog(vanTat({viec:'muadat',ngay:v.fdNgay,tu:st.tu,toi:'chi',tien:v.fdGia,ghichu:v.fdTen}));
   }});
 }
-function themChi(){
-  moForm({title:'Chi tiêu',st:{nhom:null,tu:'tm'},f:[
-    {t:'tien',id:'fcTien',lbl:'Số tiền'},
-    {t:'text',id:'fcGhi',lbl:'Xài gì'},
+function themChi(g){
+  g=g||{};
+  moForm({title:'Chi tiêu',st:{nhom:g.ghi?doanLoai(g.ghi):null,tu:g.tk||'tm'},f:[
+    {t:'tien',id:'fcTien',lbl:'Số tiền',val:g.tien?fmt(g.tien):''},
+    {t:'text',id:'fcGhi',lbl:'Xài gì',val:g.ghi||''},
     {t:'chips',k:'nhom',lbl:'Loại',list:()=>LOAI.map(([id,ten,mau])=>({id,ten,mau}))},
     {t:'chips',k:'tu',lbl:'Trả bằng',list:()=>[...tienL(),...S.acc.filter(a=>a.the)]},
-    {t:'date',id:'fcNgay',lbl:'Ngày'}
+    {t:'date',id:'fcNgay',lbl:'Ngày',val:g.ngay}
   ],
   onInput:(st,v)=>{if(st.nhomTay)return false;const g=v.fcGhi?doanLoai(v.fcGhi):null;if(g===st.nhom)return false;st.nhom=g;return true;},
   ok:(st,v)=>v.fcTien>0&&!!st.tu,
@@ -1174,6 +1180,67 @@ function datNhac(a){
   });
 }
 const THEM={chi:themChi,xay:themXay,vay:themVay,tien:themTien,no:themNo,dau:themDau,lam:()=>themLam()};
+
+/* ---------- A photo of a bank notice, a transfer or a bill: read on the phone itself, then open the form filled in ---------- */
+const OCR_JS='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+let ocrW=null;
+function boDoc(){
+  if(!ocrW)ocrW=new Promise((ok,loi)=>{const s=document.createElement('script');s.src=OCR_JS;s.onload=ok;s.onerror=loi;document.head.appendChild(s);})
+    .then(()=>Tesseract.createWorker('vie')).catch(e=>{ocrW=null;throw e;});
+  return ocrW;
+}
+/* Grey, light text turned dark on light, about 2000px wide: the 6/8 mix-up in a bank notice went away this way */
+async function lamRo(file){
+  const url=URL.createObjectURL(file), img=new Image();img.src=url;
+  try{await img.decode();}finally{URL.revokeObjectURL(url);}
+  const w=img.naturalWidth,h=img.naturalHeight;
+  let k=Math.min(2,Math.max(.5,2000/w));if(w*h*k*k>9e6)k=Math.sqrt(9e6/(w*h));
+  const c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);
+  const g=c.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(img,0,0,c.width,c.height);
+  const d=g.getImageData(0,0,c.width,c.height),a=d.data,n=a.length/4;
+  let tong=0;for(let i=0;i<a.length;i+=4){const y=a[i]*.299+a[i+1]*.587+a[i+2]*.114;a[i]=y;tong+=y;}
+  const dao=tong/n<128;
+  for(let i=0;i<a.length;i+=4){const y=dao?255-a[i]:a[i];a[i]=a[i+1]=a[i+2]=y;}
+  g.putImageData(d,0,0);return c;
+}
+const NGAN_HANG={vcb:['vietcombank'],tech:['techcombank','tcb'],tcb:['techcombank'],mb:['mbbank'],vpb:['vpbank'],tpb:['tpbank']};
+/* What the picture says: amount (+ in, − out, none = a bill or a transfer screen), which money account, date, note */
+function hieuAnh(raw){
+  const t=String(raw).replace(/\s+/g,' ').trim(), b=bo(t), so=s=>+s.replace(/[.,]/g,'');
+  let tien=null,dau=null;
+  const m=b.match(/(?:^|[^\d])([+\-−–])\s?(\d{1,3}(?:[.,]\d{3})+)/);
+  if(m){dau=m[1]==='+'?'+':'-';tien=so(m[2]);}
+  else{
+    const k=b.match(/(?:tong cong|tong tien|tong thanh toan|thanh tien|so tien|tong|total)[^\d]{0,20}(\d{1,3}(?:[.,]\d{3})+)/);
+    if(k)tien=so(k[1]);
+    else{const all=[...b.replace(/(?:so du|sd)[^\d]{0,15}\d{1,3}(?:[.,]\d{3})+/g,' ').matchAll(/\d{1,3}(?:[.,]\d{3})+/g)].map(x=>so(x[0]));if(all.length)tien=Math.max(...all);}
+  }
+  let tk=null,vt=Infinity;
+  for(const a of tienL()){
+    const ks=[bo(a.ten),...(a.alias||[]).map(bo)];ks.push(...ks.flatMap(x=>NGAN_HANG[x]||[]));
+    for(const x of ks){if(!x)continue;const i=b.search(new RegExp('(?:^|[^a-z0-9])'+x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![a-z0-9])'));if(i>=0&&i<vt){vt=i;tk=a.id;}}
+  }
+  let ngay=null;const d=b.match(/(?:^|[^\d])(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}|\d{2})(?!\d)/);
+  if(d){const y=d[3].length===2?2000+ +d[3]:+d[3],mo=+d[2],dd=+d[1];if(mo>=1&&mo<=12&&dd>=1&&dd<=31&&y>2000)ngay=y+'-'+String(mo).padStart(2,'0')+'-'+String(dd).padStart(2,'0');}
+  let ghi='';const g=t.match(/(?:\bRef\b|\bND\b|N[ộo]i dung|L[ờo]i nh[ắa]n)\s*[:.]?\s*(.+)$/i);
+  if(g)ghi=g[1].replace(/^(?:[A-Z]+\.)?\d{6,}\.?/,'').replace(/[.…\s]+$/,'').trim().slice(0,60);
+  return {tien,dau,tk,ngay,ghi};
+}
+async function docAnh(file){
+  sheet.innerHTML=`<div class="sh-h"><h2>Đọc ảnh</h2></div><div class="note" id="anhTT">Đang đọc…</div><div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button></div>`;
+  showSheet();
+  let txt;
+  try{const c=await lamRo(file);txt=(await (await boDoc()).recognize(c)).data.text;}
+  catch(e){const o=$('#anhTT');if(o)o.textContent='Không đọc được ảnh';return;}
+  const o=$('#anhTT');if(!o)return;
+  const k=hieuAnh(txt);
+  if(!k.tien){o.textContent='Không thấy số tiền trong ảnh';return;}
+  closeSheet();
+  const g={tien:k.tien,tk:k.tk,ngay:k.ngay,ghi:k.ghi};
+  if(k.dau==='+')themTien(Object.assign(g,{loai:'vao'}));
+  else if(k.dau==='-'||(k.tk&&k.tk!=='tm'))themTien(Object.assign(g,{loai:'xai'}));
+  else themChi(g);
+}
 
 /* ---------- Gõ tắt: read one sentence into a money movement ---------- */
 const tienL=()=>S.acc.filter(a=>a.nhom==='tien');
@@ -1348,6 +1415,7 @@ function luuCau(){
 cau.addEventListener('input',()=>{pk=null;veDoc();});
 cau.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();luuCau();}});
 luu.addEventListener('click',luuCau);
+$('#anhIn').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f)docAnh(f);});
 $('#dock').addEventListener('mousedown',e=>{if(e.target.closest('button'))e.preventDefault();});
 docEl.addEventListener('click',e=>{
   const p=e.target.closest('[data-slot]');
