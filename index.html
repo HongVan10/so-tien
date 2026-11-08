@@ -94,6 +94,7 @@ html,body{margin:0}[hidden]{display:none!important}
   --c-xay:#8CC6F2;--p-xay:#E0F0FD;
   --c-dau:#F2C95E;--p-dau:#FFF3CC;
   --c-chi:#F4A3BE;--p-chi:#FDE6EE;
+  --c-lam:#6CCFCB;--p-lam:#DDF6F4;
   --k-an:#FFB38A;--k-xang:#8CC6F2;--k-hd:#F2C95E;--k-ms:#B3A3F7;--k-khac:#C5CFDB;
   --b-no1:#FF9F6E;--b-no2:#FFBC94;--b-no3:#FFD6BC;--b-no4:#FFE8D9;
   --tsan:#8CC6F2;--doan:#FFF2C2;--doan-line:#F0D27A;
@@ -118,6 +119,7 @@ html,body{margin:0}[hidden]{display:none!important}
   --c-xay:#D2A15A;--p-xay:#F3E3C0;
   --c-dau:#E3B840;--p-dau:#F7E9B8;
   --c-chi:#E8968F;--p-chi:#F8DDD8;
+  --c-lam:#B391C6;--p-lam:#ECE0F2;
   --k-an:#E39A63;--k-xang:#74B2C0;--k-hd:#E3B840;--k-ms:#B391C6;--k-khac:#C4B595;
   --b-no1:#D27A45;--b-no2:#E29D70;--b-no3:#EDC1A0;--b-no4:#F6DEC9;
   --tsan:#74B2C0;--doan:#FBEBB5;--doan-line:#DDB955;
@@ -151,6 +153,7 @@ html,body{margin:0}[hidden]{display:none!important}
 [data-skin="que"] .sum[data-c="xay"]{--hero-bar:#B5782E}
 .sum[data-c="dau"]{--hero-bg:var(--p-dau)}
 .sum[data-c="chi"]{--hero-bg:var(--p-chi)}
+.sum[data-c="lam"]{--hero-bg:var(--p-lam)}
 *,*::before,*::after{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
 body.lock{overflow:hidden}
@@ -426,11 +429,11 @@ table.sk{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
 (function(){
 let DAU='07/11/2026', XN_CHI=[], XN_THU=[], NHA_DA_CHI=0;
 const MINUS='−';
-const TABS=[['tong','Tổng quan'],['chi','Chi tiêu'],['tien','Tiền'],['vay','Cho vay'],['no','Công nợ'],['xay','Xây nhà'],['dau','Đầu tư'],['so','Lịch sử']];
-const NHOM={tien:'Tiền',vay:'Cho vay',no:'Nợ'};
+const TABS=[['tong','Tổng quan'],['chi','Chi tiêu'],['tien','Tiền'],['vay','Cho vay'],['no','Công nợ'],['xay','Xây nhà'],['dau','Đầu tư'],['lam','Làm ăn'],['so','Lịch sử']];
+const NHOM={tien:'Tiền',vay:'Cho vay',no:'Nợ',lam:'Làm ăn'};
 const NO_SH=['var(--b-no1)','var(--b-no2)','var(--b-no3)','var(--b-no4)'];
 const THU=['Chủ nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];
-const S={acc:[],dat:[],log:[],lastTien:(()=>{try{return localStorage.getItem('st-last')||'vcb';}catch(e){return 'vcb';}})(),view:'tong',selTien:'vcb',selNo:'nh',chiThang:null,coVd:false,vd:[]};
+const S={acc:[],dat:[],lam:[],log:[],lastTien:(()=>{try{return localStorage.getItem('st-last')||'vcb';}catch(e){return 'vcb';}})(),view:'tong',selTien:'vcb',selNo:'nh',chiThang:null,coVd:false,vd:[]};
 let seq=0, tt=null, tay={}, pk=null, D=null, FM=null;
 const $=s=>document.querySelector(s);
 const sheet=$('#sheet'), ov=$('#ov'), cau=$('#cau'), docEl=$('#doc'), luu=$('#luu');
@@ -549,7 +552,7 @@ function ngayHTML(NG){
 }
 /* ---------- Tổng quan · Theo tháng: spending (and income) per month ---------- */
 function thangHTML(){
-  const all=chiAll(), vaoE=S.log.filter(e=>e.loai==='chuyen'&&e.viec==='vao'), mNow=isoToday().slice(0,7);
+  const all=chiAll(), vaoE=S.log.filter(e=>e.loai==='chuyen'&&e.viec==='vao'&&!e.lam), mNow=isoToday().slice(0,7);
   const months=[...new Set([...all,...vaoE].map(e=>e.ngay.slice(0,7)).concat([mNow]))].sort().slice(-6);
   const sum=(arr,mm)=>arr.filter(e=>e.ngay.startsWith(mm)).reduce((s,e)=>s+e.tien,0);
   const xai=months.map(mm=>sum(all,mm)), vao=months.map(mm=>sum(vaoE,mm)), coVao=vao.some(v=>v>0);
@@ -623,6 +626,7 @@ function delta(e,a){
 function noiDung(e,a){
   if(e.loai==='chinh')return 'Chỉnh số dư';
   const n=nameOf, g=e.ghichu?' · '+e.ghichu:'';
+  if(e.lam)return lamTen(e.lam)+g;
   switch(e.viec){
     case 'xai':return e.ghichu||'Xài';
     case 'vao':return e.ghichu||'Tiền vào';
@@ -660,7 +664,7 @@ function doanLoai(t){
   return 'khac';
 }
 const loaiOf=e=>e.nhom||doanLoai(e.ghichu);
-const chiAll=()=>[...S.log.filter(e=>e.loai==='chuyen'&&e.viec==='xai'),...(S.coVd?S.vd:[])];
+const chiAll=()=>[...S.log.filter(e=>e.loai==='chuyen'&&e.viec==='xai'&&!e.lam),...(S.coVd?S.vd:[])];
 function vChi(T){
   const all=chiAll(), today=isoToday(), mNow=today.slice(0,7);
   const tong=f=>all.filter(f).reduce((s,e)=>s+e.tien,0);
@@ -763,9 +767,76 @@ function vDau(T){
   };
   return `<section class="sum" data-c="dau"><div class="sum-top"><span class="hero-lbl">Đầu tư</span>${plus('dau')}</div><div class="sum-num">${fmt(T.dat)}</div>${ll?`<div class="sum-sub"><span>Lời/Lỗ</span><b class="${cls(ll)}">${fmtS(ll)}</b></div>`:''}</section><div class="card">${S.dat.map(card).join('')}</div>`;
 }
+
+/* ---------- Tab: Làm ăn — each business ("mối") with what came in and went out. Entries are ordinary money in/out
+   (viec vao/xai) tagged with lam:<mối id>, so the real accounts and the overall total move with them, but they stay
+   out of personal spending (Chi tiêu) and the monthly income line. ---------- */
+const lamTen=id=>(S.lam.find(x=>x.id===id)||{ten:'?'}).ten;
+const lamV=e=>e.viec==='vao'?e.tien:-e.tien;
+const lamE=id=>S.log.filter(e=>e.loai==='chuyen'&&e.lam&&(id==null||e.lam===id));
+function lamCong(es,mm){
+  let thu=0,chi=0;
+  for(const e of es){if(mm&&!e.ngay.startsWith(mm))continue;if(e.viec==='vao')thu+=e.tien;else chi+=e.tien;}
+  return {thu,chi,loi:thu-chi};
+}
+function vLam(){
+  const mNow=isoToday().slice(0,7), th='Tháng '+(+mNow.slice(5)), all=lamE(), C=lamCong(all), M=lamCong(all,mNow);
+  const cards=S.lam.map(x=>{
+    const es=all.filter(e=>e.lam===x.id), c=lamCong(es), m=lamCong(es,mNow);
+    return `<button type="button" class="loan" data-lam="${x.id}"><span class="loan-a"><span>${esc(x.ten)}</span><b class="${cls(c.loi)}">${fmtS(c.loi)}</b></span><span class="trio"><span><small>Thu</small><b>${fmt(c.thu)}</b></span><span><small>Chi</small><b>${fmt(c.chi)}</b></span><span><small>${th}</small><b class="${cls(m.loi)}">${fmtS(m.loi)}</b></span></span></button>`;
+  }).join('');
+  const days=new Map();
+  [...all].sort((a,b)=>b.ngay.localeCompare(a.ngay)||b.ts-a.ts).forEach(e=>{if(!days.has(e.ngay))days.set(e.ngay,[]);days.get(e.ngay).push(e);});
+  const row=e=>{const thu=e.viec==='vao';return `<button type="button" class="item" data-log="${e.id}"><i class="sw" style="background:var(${thu?'--c-tien':'--c-chi'})"></i><span class="lg-main"><span class="nm">${esc(e.ghichu||(thu?'Thu':'Chi'))}</span><span class="note">${esc(lamTen(e.lam))} · ${esc(nameOf(thu?e.toi:e.tu))}</span></span><span class="v ${thu?'pos':'neg'}">${fmtS(lamV(e))}</span></button>`;};
+  const dayHTML=[...days].slice(0,10).map(([d,arr])=>{const net=arr.reduce((s,e)=>s+lamV(e),0);return `<div class="day"><div class="day-h"><span>${dayLabel(d)}</span><b class="${cls(net)}">${fmtS(net)}</b></div><div class="card">${arr.map(row).join('')}</div></div>`;}).join('');
+  return `<section class="sum" data-c="lam"><div class="sum-top"><span class="hero-lbl">Làm ăn</span>${plus('lam')}</div><div class="sum-num ${cls(C.loi)}">${fmtS(C.loi)}</div>
+      <div class="sum-sub"><span>${th}</span><b>${fmtS(M.loi)}</b></div>
+      <div class="sum-sub"><span>Thu</span><b>${fmt(C.thu)}</b></div>
+      <div class="sum-sub"><span>Chi</span><b>${fmt(C.chi)}</b></div></section>
+    <section class="sec"><div class="card">${cards}<button type="button" class="item add" data-add="lam">+ Thêm</button></div></section>
+    ${dayHTML?`<section class="sec"><div class="sec-h"><span>Từng ngày</span></div>${dayHTML}</section>`:''}`;
+}
+function openLam(id){
+  const x=S.lam.find(l=>l.id===id);if(!x)return;
+  const es=lamE(id).sort((a,b)=>a.ngay.localeCompare(b.ngay)||a.ts-b.ts), c=lamCong(es);
+  let run=0;
+  const body=es.map(e=>{run+=lamV(e);return {e,run};}).reverse().map(({e,run})=>`<tr data-log="${e.id}"><td class="d">${dmy(e.ngay).slice(0,5)}</td><td>${esc(e.ghichu||(e.viec==='vao'?'Thu':'Chi'))}</td><td class="r ${e.viec==='vao'?'pos':'neg'}">${fmtS(lamV(e))}</td><td class="r">${fmtS(run)}</td></tr>`).join('');
+  sheet.innerHTML=`<div class="sh-h"><h2>${esc(x.ten)}</h2><span class="tag">Làm ăn</span></div>
+    <div class="big ${cls(c.loi)}">${fmtS(c.loi)}</div>
+    <div class="kvs"><div class="kv"><span>Thu</span><b>${fmt(c.thu)}</b></div><div class="kv"><span>Chi</span><b>${fmt(c.chi)}</b></div></div>
+    ${body?`<div class="mini"><table class="sk"><colgroup><col class="c-d"><col><col class="c-t"><col class="c-c"></colgroup><thead><tr><th>Ngày</th><th>Khoản</th><th class="r">Thu · Chi</th><th class="r">Lời/Lỗ</th></tr></thead><tbody>${body}</tbody></table></div>`:`<div class="sk-acts"><button type="button" class="lnk" id="lXoa">Xoá</button></div>`}
+    <div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="lGhi">Ghi</button></div>`;
+  sheet.querySelectorAll('tr[data-log]').forEach(tr=>tr.addEventListener('click',()=>openLog(tr.dataset.log)));
+  $('#lGhi').addEventListener('click',()=>themLam(id));
+  const xo=$('#lXoa');if(xo)xo.addEventListener('click',()=>{S.lam=S.lam.filter(l=>l.id!==id);closeSheet();render();toast('Đã xoá');});
+  showSheet();
+}
+function themLamMoi(ten){
+  const k=bo(ten).trim(), co=S.lam.find(x=>bo(x.ten).trim()===k);if(co)return co.id;
+  const id='l'+uid();S.lam.push({id,ten});return id;
+}
+function themLam(lam){
+  const goi=lam||(S.lam.some(x=>x.id===S.lastLam)?S.lastLam:S.lam.length===1?S.lam[0].id:null);
+  moForm({title:'Làm ăn',st:{loai:'chi',lam:goi,tk:S.lastTien},f:[
+    {t:'seg',k:'loai',opts:[['chi','Chi'],['thu','Thu']]},
+    {t:'chips',k:'lam',lbl:'Mối',list:()=>S.lam,moi:'lam'},
+    {t:'tien',id:'fkTien',lbl:'Số tiền'},
+    {t:'text',id:'fkGhi',lbl:'Khoản'},
+    {t:'chips',k:'tk',lbl:st=>st.loai==='chi'?'Lấy từ':'Vào',list:st=>st.loai==='chi'?[...tienL(),...S.acc.filter(a=>a.the)]:tienL()},
+    {t:'date',id:'fkNgay',lbl:'Ngày'}
+  ],
+  ok:(st,v)=>v.fkTien>0&&!!st.lam&&!!st.tk,
+  save:(st,v)=>{
+    const id=String(st.lam).startsWith('moi:')?themLamMoi(st.lam.slice(4)):st.lam;
+    const m=st.loai==='chi'?{viec:'xai',tu:st.tk,toi:'chi'}:{viec:'vao',tu:'thu',toi:st.tk};
+    addLog(vanTat(Object.assign(m,{lam:id,ngay:v.fkNgay,tien:v.fkTien,ghichu:v.fkGhi})));
+    S.lastLam=id;if(get(st.tk).nhom==='tien')S.lastTien=st.tk;
+  }});
+}
 function moTa(e){
   if(e.loai==='chinh')return {t:'Chỉnh số dư',s:nameOf(e.acc)};
   const n=nameOf;
+  if(e.lam)return e.viec==='vao'?{t:'Thu · '+lamTen(e.lam),s:'vào '+n(e.toi)}:{t:'Chi · '+lamTen(e.lam),s:'từ '+n(e.tu)};
   switch(e.viec){
     case 'xai':return {t:'Xài',s:n(e.tu)};
     case 'vao':return {t:'Tiền vào',s:n(e.toi)};
@@ -803,7 +874,7 @@ function render(){
   const T=totals();
   tabsEl.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===S.view));
   if(trangThai!=='san'){$('#view').innerHTML=trangThai==='khoa'?KHOA_HTML:`<div class="cho">${TRANG[trangThai]}${trangThai==='cham'?'<button type="button" class="lnk" data-mo-lai>Thử lại</button>':''}</div>`;return;}
-  const V={tong:vTong,chi:vChi,tien:T=>vSaoKe('tien',T),vay:vVay,no:T=>vSaoKe('no',T),xay:vXay,dau:vDau,so:soHTML};
+  const V={tong:vTong,chi:vChi,tien:T=>vSaoKe('tien',T),vay:vVay,no:T=>vSaoKe('no',T),xay:vXay,dau:vDau,lam:vLam,so:soHTML};
   $('#view').innerHTML=V[S.view](T);
 }
 function moTab(v){
@@ -855,7 +926,7 @@ function openAdd(nhom){
     <div class="fld"><label for="nTen">Tên</label><input id="nTen" autocomplete="off" enterkeyhint="done"></div>
     <div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="nLuu" disabled>Lưu</button></div>`;
   const inp=$('#nTen');
-  const save=()=>{const ten=inp.value.trim();if(!ten)return;themAcc(ten,nhom);closeSheet();render();toast('Đã thêm');};
+  const save=()=>{const ten=inp.value.trim();if(!ten)return;if(nhom==='lam')themLamMoi(ten);else themAcc(ten,nhom);closeSheet();render();toast('Đã thêm');};
   inp.addEventListener('input',()=>{$('#nLuu').disabled=!inp.value.trim();});
   inp.addEventListener('keydown',e=>{if(e.key==='Enter')save();});
   $('#nLuu').addEventListener('click',save);
@@ -1102,7 +1173,7 @@ function datNhac(a){
   save:(st,v)=>{a.nhacLai=st.kieu==='bao'?{theoBao:true}:{tien:v.fqTien,ngay:+v.fqNgay};}
   });
 }
-const THEM={chi:themChi,xay:themXay,vay:themVay,tien:themTien,no:themNo,dau:themDau};
+const THEM={chi:themChi,xay:themXay,vay:themVay,tien:themTien,no:themNo,dau:themDau,lam:()=>themLam()};
 
 /* ---------- Gõ tắt: read one sentence into a money movement ---------- */
 const tienL=()=>S.acc.filter(a=>a.nhom==='tien');
@@ -1319,6 +1390,7 @@ document.querySelector('.wrap').addEventListener('click',e=>{
   const sl=e.target.closest('[data-sel]');if(sl){S[sl.dataset.nhom==='no'?'selNo':'selTien']=sl.dataset.sel;render();return;}
   const su=e.target.closest('[data-sua]');if(su){openAcc(su.dataset.sua);return;}
   const dt=e.target.closest('[data-dat]');if(dt){openDat(+dt.dataset.dat);return;}
+  const lm=e.target.closest('[data-lam]');if(lm){openLam(lm.dataset.lam);return;}
   const it=e.target.closest('[data-acc]');if(it){openAcc(it.dataset.acc);return;}
   const ad=e.target.closest('[data-add]');if(ad){openAdd(ad.dataset.add);return;}
   const lg=e.target.closest('[data-log]');if(lg)openLog(lg.dataset.log);
@@ -1389,7 +1461,7 @@ let THE_HE=0; // bumps on every local change, so a read that was in flight acros
 function day(op){THE_HE++;HANG.push(op);luuHang();guiHang();}
 function apCfg(d){
   const c=JSON.parse(JSON.stringify(d));
-  S.acc=c.acc||[];S.dat=c.dat||[];XN_CHI=c.xnChi||[];XN_THU=c.xnThu||[];
+  S.acc=c.acc||[];S.dat=c.dat||[];S.lam=c.lam||[];XN_CHI=c.xnChi||[];XN_THU=c.xnThu||[];
   NHA_DA_CHI=XN_CHI.reduce((s,r)=>s+r.v,0);
   if(c.dau)DAU=dmy(c.dau);
   NOI=c.noi&&c.noi.ct?c.noi:{ct:{}};
@@ -1399,12 +1471,12 @@ function apHang(){
   for(const op of HANG){
     if(op.op==='ghi'){S.log=S.log.filter(z=>z.id!==op.id);S.log.push(Object.assign({},op.data,{id:op.id}));}
     else if(op.op==='xoa')S.log=S.log.filter(z=>z.id!==op.id);
-    else if(op.op==='cfg'){const c=JSON.parse(JSON.stringify(op.data));if(c.acc)S.acc=c.acc;if(c.dat&&!TAB_CU)S.dat=c.dat;if(c.noi)NOI=c.noi;}
+    else if(op.op==='cfg'){const c=JSON.parse(JSON.stringify(op.data));if(c.acc)S.acc=c.acc;if(c.dat&&!TAB_CU)S.dat=c.dat;if(c.noi)NOI=c.noi;if(c.lam)S.lam=c.lam;}
   }
 }
 function luuCfg(){
   if(!DB||trangThai!=='san')return;
-  const now=JSON.stringify({acc:S.acc,dat:S.dat.map(({_r,...d})=>d),noi:NOI});
+  const now=JSON.stringify({acc:S.acc,dat:S.dat.map(({_r,...d})=>d),noi:NOI,lam:S.lam});
   if(now===cfgDaLuu)return;
   cfgDaLuu=now;
   day({op:'cfg',data:JSON.parse(now)});
@@ -1515,7 +1587,7 @@ async function tai(lanDau){
     daTai=sig;DB=true;
     if(r.cfg){
       apCfg(r.cfg);CFG_DAU=r.cfg.dau||'';
-      cfgDaLuu=JSON.stringify({acc:S.acc,dat:S.dat,noi:NOI});
+      cfgDaLuu=JSON.stringify({acc:S.acc,dat:S.dat,noi:NOI,lam:S.lam});
       const coTab=r.tabs&&r.tabs[TAB_SO];
       if(coTab)docTabCu(r.tabs);else TAB_CU=null;
       S.log=coTab?tronSo(r.tabs[TAB_SO]):(r.log||[]);
@@ -1705,7 +1777,27 @@ function ghiTabCu(){
   }
   if(JSON.stringify(NOI)!==noiTruoc)luuCfg();
 }
-function sauDoi(){capNhatNgay();ghiTabCu();}
+/* "Làm ăn" tab, written whole by the app like "Theo ngày": each business with Thu/Chi/Lời-Lỗ, then every entry */
+const TAB_LAM='Làm ăn';
+function capNhatLam(){
+  if(trangThai!=='san')return;
+  const es=lamE().sort((a,b)=>(a.ngay||'').localeCompare(b.ngay||'')||(a.ts||0)-(b.ts||0));
+  if(!S.lam.length&&!es.length)return;
+  const cong=id=>{const c=lamCong(id==null?es:es.filter(e=>e.lam===id));return [c.thu,c.chi,c.loi];};
+  const n=S.lam.length, h=n+4; // h: header row of the entry list
+  const v=[['Mối','Thu','Chi','Lời/Lỗ','',''],...S.lam.map(x=>[x.ten,...cong(x.id),'','']),['Tổng',...cong(null),'',''],['','','','','',''],
+    ['Ngày','Mối','Khoản','Thu','Chi','Tài khoản'],
+    ...es.map(e=>{const thu=e.viec==='vao';return [dmy(e.ngay),lamTen(e.lam),e.ghichu||'',thu?e.tien:'',thu?'':e.tien,nameOf(thu?e.toi:e.tu)];})];
+  const sig=JSON.stringify(v);
+  let cu='';try{cu=localStorage.getItem('st-lam')||'';}catch(e){}
+  if(sig===cu)return;
+  try{localStorage.setItem('st-lam',sig);}catch(e){}
+  const kieu=[{a1:'A1:F1',dam:true},{a1:'B2:D'+(n+2),so:'#,##0;[Red]-#,##0'},{a1:'A'+(n+2)+':D'+(n+2),dam:true},{a1:'A'+h+':F'+h,dam:true}];
+  if(es.length)kieu.push({a1:'A'+(h+1)+':A'+(h+es.length),so:'@'},{a1:'D'+(h+1)+':E'+(h+es.length),so:'#,##0'});
+  HANG=HANG.filter(o=>o===dangOp||!(o.op==='dat'&&o.tab===TAB_LAM));
+  day({op:'dat',tab:TAB_LAM,xoa:true,values:v,dong:{hang:1},kieu});
+}
+function sauDoi(){capNhatNgay();capNhatLam();ghiTabCu();}
 // a loan the owner keeps in the Vay table reads its rate from column D there, so a new rate is written there too
 function ghiLaiVay(a){const r=TAB_CU&&TAB_CU[T_VAY]&&VAY_DONG.get(a.id);if(r)viet(T_VAY,r,4,[[a.lai||'']]);}
 
