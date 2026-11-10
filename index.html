@@ -288,6 +288,16 @@ table.sk{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
 .gat.tat{background:var(--line)}
 .gat.tat::after{left:2px}
 .btn.tl-btn{height:42px;padding:0 18px;font-size:15px;border-radius:12px}
+.tl-ngay{display:flex;align-items:baseline;gap:8px;margin-top:10px;padding:8px 12px;border-radius:12px;background:var(--surface-2);font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tl-ngay b{font-size:17px;color:var(--ink)}
+.tl-ngay span:last-child:not(:first-child){margin-left:auto}
+.tl-ls{display:grid;margin-top:6px}
+.tl-l{display:grid;grid-template-columns:auto 1fr auto;gap:10px;padding:8px 2px;font-size:14px;text-align:left;border-bottom:1px dashed var(--line)}
+.tl-l span:first-child{color:var(--co);font-weight:600}
+.tl-l b{font-variant-numeric:tabular-nums}
+.tl-nut{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.tl-nut .tl-btn{padding:0 8px}
+.tl-nut.mot{grid-template-columns:1fr}
 
 /* Gõ tắt dock */
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -6px 24px var(--shadow);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px calc(10px + env(safe-area-inset-bottom,0px))}
@@ -608,17 +618,14 @@ function thangHTML(){
 
 /* ---------- Nhắc lãi: interest to collect from borrowers, interest to pay on debts ---------- */
 let NHAC=[];
-function cungNgay(iso,k){const [y,m,d]=iso.split('-').map(Number);const last=new Date(y,m-1+k+1,0).getDate();return isoNgay(new Date(y,m-1+k,Math.min(d,last)));}
 const soNgayToi=iso=>Math.round((Date.parse(iso)-Date.parse(isoToday()))/864e5);
 function dsNhac(T){
   const today=isoToday(), ds=[], chuaDat=[];
+  /* a loan has no due date: it is listed while interest is unpaid, with the days it has been running */
   for(const a of nguoiL()){
-    const L=laiInfo(a,T);if(!L)continue;
-    let k=1,ky,tre=null;
-    while((ky=cungNgay(ngayVayOf(a),k))<=today){if(tre==null&&laiInfo(a,T,ky).tong>L.da)tre=ky;k++;}
-    const tien=tre?L.tong-L.da:laiInfo(a,T,ky).tong-L.da;
-    if(tien<=0)continue;
-    ds.push({thu:true,ten:a.ten+' trả lãi',han:tre||ky,tre:!!tre,tien,act:()=>thuLai(a,tien)});
+    const L=laiInfo(a,T);if(!L||L.tong<=L.da)continue;
+    const tien=L.tong-L.da, tu=laiTu(a,T,L);
+    ds.push({thu:true,ai:a.ten,ten:a.ten+' trả lãi',tu,ngay:soNgayLai(tu),han:'',tre:false,tien,act:()=>thuLai(a,tien)});
   }
   for(const a of noL()){
     if(a.the)continue;
@@ -634,17 +641,19 @@ function dsNhac(T){
     const han=daTra?hanThang(m===12?y+1:y,m===12?1:m+1):hanThang(y,m);
     ds.push({thu:false,ten:'Trả lãi '+a.ten,han,tre:!daTra&&han<today,tien,act:()=>traLai(a)});
   }
-  ds.sort((a,b)=>(b.tre-a.tre)||a.han.localeCompare(b.han));
+  /* late payments first, then interest owed to the owner (largest first), then payments coming up, then the bank's */
+  const hang=r=>r.tre?0:r.thu?1:r.bao?3:2;
+  ds.sort((a,b)=>hang(a)-hang(b)||(a.thu?b.tien-a.tien:a.han.localeCompare(b.han)));
   return {ds,chuaDat};
 }
 function nhacHTML(T){
   const {ds,chuaDat}=dsNhac(T);NHAC=ds;
   if(!ds.length&&!chuaDat.length)return '';
-  const han=r=>{if(r.bao)return 'chờ ngân hàng báo';const n=soNgayToi(r.han);return r.tre?`trễ từ ${dmy(r.han).slice(0,5)} · ${-n} ngày`:n===0?'hạn hôm nay':`hạn ${dmy(r.han).slice(0,5)} · còn ${n} ngày`;};
+  const han=r=>{if(r.thu)return `${r.ngay} ngày · từ ${dmy(r.tu).slice(0,5)}`;if(r.bao)return 'chờ ngân hàng báo';const n=soNgayToi(r.han);return r.tre?`trễ từ ${dmy(r.han).slice(0,5)} · ${-n} ngày`:n===0?'hạn hôm nay':`hạn ${dmy(r.han).slice(0,5)} · còn ${n} ngày`;};
   const rows=ds.map((r,i)=>`<button type="button" class="item" data-nhac="${i}"><i class="sw" style="background:${r.thu?'var(--c-tien)':'var(--c-no)'}"></i><span class="lg-main"><span class="nm">${esc(r.ten)}</span><span class="note${r.tre?' tre':''}">${han(r)}</span></span><span class="v ${r.thu?'pos':r.tien==null?'zero':''}">${r.tien==null?'—':fmt(r.tien)}</span></button>`).join('')
     +(chuaDat.length?`<button type="button" class="item go" data-go="lai"><i class="sw" style="background:var(--line)"></i><span class="lg-main"><span class="nm">Chưa đặt nhắc lãi</span><span class="note">${esc(chuaDat.join(' · '))}</span></span><span></span><span class="chev">›</span></button>`:'');
-  const r0=ds[0], n0=r0?soNgayToi(r0.han):0;
-  const cau=!r0?'':r0.bao?`Nhớ ${r0.ten.replace(/^Trả/,'trả')} khi ngân hàng báo nha.`:r0.tre?`${r0.ten} trễ ${-n0} ngày rồi!`:n0===0?`${r0.ten} hạn hôm nay nha!`:`${r0.ten} còn ${n0} ngày nữa nha.`;
+  const r0=ds[0], n0=r0&&r0.han?soNgayToi(r0.han):0;
+  const cau=!r0?'':r0.thu?`${r0.ai} ${r0.ngay} ngày chưa trả lãi rồi!`:r0.bao?`Nhớ ${r0.ten.replace(/^Trả/,'trả')} khi ngân hàng báo nha.`:r0.tre?`${r0.ten} trễ ${-n0} ngày rồi!`:n0===0?`${r0.ten} hạn hôm nay nha!`:`${r0.ten} còn ${n0} ngày nữa nha.`;
   const loi=cau?`<div class="loi"><svg viewBox=\"14 40 132 140\" aria-hidden=\"true\"><use href=\"#nx-nam\"/></svg><div class="bong">${esc(cau)}</div></div>`:'';
   return `<section class="sec"><div class="sec-h"><span>Nhắc lãi</span>${ds.length?`<b>${ds.length}</b>`:''}</div><div class="card">${loi}${rows}</div></section>`;
 }
@@ -764,12 +773,14 @@ function ngayVayOf(a){
 function laiInfo(a,T){
   const nv=ngayVayOf(a);
   if(!nv||!a.lai)return null;
-  /* interest runs on each balance only from the day it existed: opening loan from ngayVay, later moves from their own date.
-     Counts up to and including `den` (default today), same as the sheet. */
+  /* interest runs on each balance only from the day it existed: opening loan from ngayVay, more lent from its own date,
+     money paid back from the day after (the day of paying still counts, like the loan day). Counts up to and including
+     `den` (default today), same as the sheet. */
   const dd=s=>Math.round(Date.parse(s)/864e5), den=arguments[2]||isoToday(), end=dd(den)+1;
-  const es=S.log.filter(e=>(e.tu===a.id||e.toi===a.id||e.acc===a.id)&&e.ngay<=den).sort((x,y)=>x.ngay.localeCompare(y.ngay)||x.ts-y.ts);
+  const ev=S.log.filter(e=>(e.tu===a.id||e.toi===a.id||e.acc===a.id)&&e.ngay<=den).sort((x,y)=>x.ngay.localeCompare(y.ngay)||x.ts-y.ts)
+    .map(e=>{const d=delta(e,a);return {d,t:dd(e.ngay)+(d<0?1:0)};}).sort((x,y)=>x.t-y.t);
   let goc=a.so, t=dd(nv), lai=0;
-  for(const e of es){const t2=Math.min(end,Math.max(t,dd(e.ngay)));lai+=goc/1e8*a.lai*(t2-t);t=t2;goc+=delta(e,a);}
+  for(const v of ev){const t2=Math.min(end,Math.max(t,v.t));lai+=goc/1e8*a.lai*(t2-t);t=t2;goc+=v.d;}
   lai+=goc/1e8*a.lai*Math.max(0,end-t);
   const tong=Math.round(lai), da=S.log.reduce((s,e)=>s+(e.nguoi===a.id?e.tien:0),0);
   return {tong,da,phai:T.b[a.id]+tong-da};
@@ -784,29 +795,23 @@ function vVay(T){
   return `<section class="sum" data-c="vay"><div class="sum-top"><span class="hero-lbl">Cho vay</span>${plus('vay')}</div><div class="sum-num">${fmt(sum)}</div>${chua?`<div class="sum-sub"><span>Lãi chưa thu</span><b>${fmt(chua)}</b></div>`:''}</section><div class="card">${cards}<button type="button" class="item add" data-add="vay">+ Thêm</button></div>`;
 }
 
-/* ---------- Tab: Lãi — one card per person, a stamp per month: red = late, ✓ = paid, dashed = still to come.
+/* ---------- Tab: Lãi — one card per person. A loan counts interest day by day (no due date), with Đã trả lãi and
+   Đã trả gốc + lãi; a debt the owner pays monthly gets a stamp per month: red = late, ✓ = paid, dashed = still to come.
    The switch turns interest off (0, from the loan date) and back on at the rate it had. ---------- */
 let LAI_O=[];
 const gon=n=>n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'').replace('.',',')+'tr':n>=1e3?Math.round(n/1e3)+'k':String(Math.round(n));
 const thangOf=iso=>'T'+(+iso.slice(5,7));
 const theoNgay=(x,y)=>x.ngay.localeCompare(y.ngay)||x.ts-y.ts;
-/* A loan's periods end on the loan's day of each month; a period's interest is the interest to its end minus the
-   interest to the end before. What was collected pays the oldest periods first. Five stamps to a row. */
-function kyThu(a,T){
-  const L=laiInfo(a,T);if(!L)return null;
-  const nv=ngayVayOf(a), today=isoToday(), conVay=T.b[a.id]>0;
-  let ds=[], truoc=0;
-  for(let k=1;k<=600;k++){
-    const han=cungNgay(nv,k), toi=ds.some(o=>o.han>today);
-    if(han>today&&(!conVay||(toi&&ds.length>=5&&ds.length%5===0)))break;
-    const cong=laiInfo(a,T,han).tong;ds.push({han,tien:cong-truoc,cong});truoc=cong;
-  }
-  ds=ds.filter(o=>o.tien>0);
-  let coToi=false;
-  for(const o of ds){o.con=Math.max(0,Math.min(o.tien,o.cong-L.da));o.k=o.con<=0?'xong':o.han<today?'tre':coToi?'sau':(coToi=true,'toi');}
-  while(ds.length>15&&ds[0].k==='xong')ds.shift();
-  return {L,ds};
+/* A loan has no due date: interest runs day by day. The unpaid part starts on the first day whose interest the
+   payments so far do not cover (the loan date when nothing was paid, the day after when everything was). */
+const ngaySo=s=>Math.round(Date.parse(s)/864e5), soNgay=n=>new Date(n*864e5).toISOString().slice(0,10);
+function laiTu(a,T,L){
+  if(!L||L.tong<=L.da)return null;
+  let lo=ngaySo(ngayVayOf(a)), hi=ngaySo(isoToday());
+  while(lo<hi){const mid=(lo+hi)>>1;if(laiInfo(a,T,soNgay(mid)).tong>L.da)hi=mid;else lo=mid+1;}
+  return soNgay(lo);
 }
+const soNgayLai=tu=>tu?ngaySo(isoToday())-ngaySo(tu)+1:0;
 /* A debt with interest each month: one stamp per month from the first month paid (or this month), paid = ✓. */
 function kyTra(a){
   const n=a.nhacLai, today=isoToday(), nay=today.slice(0,7);
@@ -827,16 +832,32 @@ function kyTra(a){
 }
 const temHTML=(o,nho)=>{LAI_O.push(o);return `<button type="button" class="dt ${o.k}" data-o="${LAI_O.length-1}"><i>${o.k==='xong'?'✓ ':''}${thangOf(o.han||o.ym+'-01')}</i><small>${nho}</small></button>`;};
 function theThu(a,T){
-  const on=!!a.lai, x=on?kyThu(a,T):null, L=x&&x.L, tre=x?x.ds.some(o=>o.k==='tre'):false;
-  const es=S.log.filter(e=>e.nguoi===a.id).sort(theoNgay);
-  const tem=x&&x.ds.length?`<div class="tem">${x.ds.map(o=>{
-    o.act=o.k==='xong'?()=>{let s=0;const e=es.find(z=>(s+=z.tien)>=o.cong);if(e)openLog(e.id);}:()=>thuLai(a,o.cong-L.da);
-    return temHTML(o,o.k==='xong'?gon(o.tien):o.k==='tre'?gon(o.con):dmy(o.han).slice(0,5));
-  }).join('')}</div>`:'';
-  const sub=fmt(T.b[a.id])+(on?' · '+shortU(a.lai)+'/ngày':'');
+  const on=!!a.lai, L=on?laiInfo(a,T):null, chua=L?Math.max(0,L.tong-L.da):0, tu=laiTu(a,T,L), goc=T.b[a.id];
+  const sub=fmt(goc)+(on?' · '+shortU(a.lai)+'/ngày':'');
+  const ngay=L?`<div class="tl-ngay">${tu?`<span>Từ ${dmy(tu).slice(0,5)}</span><b>${soNgayLai(tu)} ngày</b><span>× ${fmt(goc/1e8*a.lai)}</span>`:'<span>Đã trả hết lãi</span>'}</div>`:'';
+  const ls=S.log.filter(e=>e.nguoi===a.id||(e.viec==='thuno'&&e.tu===a.id)).sort(theoNgay).reverse().slice(0,5);
+  const lsHTML=ls.length?`<div class="tl-ls">${ls.map(e=>`<button type="button" class="tl-l" data-log="${e.id}"><span>✓ ${dmy(e.ngay).slice(0,5)}</span><span>${e.nguoi===a.id?'Lãi':'Gốc'}</span><b>${fmt(e.tien)}</b></button>`).join('')}</div>`:'';
   return `<div class="card tl${on?'':' tat'}"><div class="tl-top"><div class="tl-a"><b>${esc(a.ten)}</b>${on?`<button type="button" class="tl-sub" data-lai-sua="${a.id}">${sub}</button>`:`<span class="tl-sub">${sub}</span>`}</div>
-    <div class="tl-con"><span>Chưa thu</span><b class="${tre?'neg':''}">${fmt(L?Math.max(0,L.tong-L.da):0)}</b></div></div>${tem}
-    <div class="tl-bot"><button type="button" class="gat-b" data-gat="${a.id}"><span class="gat${on?'':' tat'}"></span>${on?'Tính lãi':'Không tính lãi'}</button>${on?`<button type="button" class="btn pri tl-btn" data-lai-thu="${a.id}">Thu lãi</button>`:''}</div></div>`;
+    <div class="tl-con"><span>Chưa trả lãi</span><b class="${chua>0?'neg':''}">${fmt(chua)}</b></div></div>${ngay}${lsHTML}
+    <div class="tl-bot"><button type="button" class="gat-b" data-gat="${a.id}"><span class="gat${on?'':' tat'}"></span>${on?'Tính lãi':'Không tính lãi'}</button></div>
+    ${on?`<div class="tl-nut"><button type="button" class="btn pri tl-btn" data-lai-thu="${a.id}">Đã trả lãi</button><button type="button" class="btn pri tl-btn" data-lai-het="${a.id}">Đã trả gốc + lãi</button></div>`
+      :goc>0?`<div class="tl-nut mot"><button type="button" class="btn pri tl-btn" data-lai-goc="${a.id}">Đã trả gốc</button></div>`:''}</div>`;
+}
+/* Principal and interest back in one go: two lines, Thu gốc and Thu lãi, the same day into the same account. */
+function thuHet(a){
+  const T=totals(), L=laiInfo(a,T), goc=Math.max(0,T.b[a.id]), lai=L?Math.max(0,L.tong-L.da):0, so=v=>Number.isFinite(v)?v:0;
+  moForm({title:'Trả gốc + lãi · '+esc(a.ten),st:{tk:S.lastTien},f:[
+    {t:'tien',id:'fhGoc',lbl:'Gốc',val:fmt(goc)},
+    {t:'tien',id:'fhLai',lbl:'Lãi',val:fmt(lai)},
+    {t:'chips',k:'tk',lbl:'Vào',list:()=>tienL()},
+    {t:'date',id:'fhNgay',lbl:'Ngày'}
+  ],
+  ok:(st,v)=>!!st.tk&&so(v.fhGoc)>=0&&so(v.fhLai)>=0&&so(v.fhGoc)+so(v.fhLai)>0,
+  save:(st,v)=>{
+    if(so(v.fhGoc)>0)addLog(vanTat({viec:'thuno',tu:a.id,toi:st.tk,tien:so(v.fhGoc),ngay:v.fhNgay}));
+    if(so(v.fhLai)>0)addLog(vanTat({viec:'vao',tu:'thu',toi:st.tk,tien:so(v.fhLai),ghichu:'lãi '+a.ten,nguoi:a.id,ngay:v.fhNgay}));
+    S.lastTien=st.tk;
+  }});
 }
 function theTra(a,T){
   const n=a.nhacLai, ds=n?kyTra(a):[], tre=ds.filter(o=>o.k==='tre'), toi=ds.find(o=>o.k==='toi');
@@ -853,7 +874,8 @@ function theTra(a,T){
 }
 function vLai(T){
   LAI_O=[];
-  const thu=nguoiL().filter(a=>a.lai||T.b[a.id]>0).sort((x,y)=>!!y.lai-!!x.lai);
+  const conLai=a=>{const L=laiInfo(a,T);return !!L&&L.tong>L.da;};
+  const thu=nguoiL().filter(a=>T.b[a.id]>0||conLai(a)).sort((x,y)=>!!y.lai-!!x.lai);
   const tra=noL().filter(a=>!a.the&&(a.nhacLai||T.b[a.id]>0)).sort((x,y)=>!!y.nhacLai-!!x.nhacLai);
   return (thu.length?`<section class="sec"><div class="sec-h"><span>Người ta trả mình</span></div>${thu.map(a=>theThu(a,T)).join('')}</section>`:'')
     +(tra.length?`<section class="sec"><div class="sec-h"><span>Mình trả</span></div>${tra.map(a=>theTra(a,T)).join('')}</section>`:'');
@@ -871,11 +893,7 @@ function gatLai(a){
   }
   render();sauThaoTac();toast('Đã lưu');
 }
-function laiThuGoiY(a,T){
-  const x=kyThu(a,T);if(!x)return null;
-  const tre=x.ds.filter(o=>o.k==='tre'), o=tre.length?tre[tre.length-1]:x.ds.find(z=>z.k==='toi');
-  return o?o.cong-x.L.da:null;
-}
+function laiThuGoiY(a,T){const L=laiInfo(a,T);return L&&L.tong>L.da?L.tong-L.da:null;}
 
 /* ---------- Tab: Xây nhà ---------- */
 function vXay(T){
@@ -1313,9 +1331,9 @@ function themChi(g){
   save:(st,v)=>{addLog(vanTat({viec:'xai',tu:st.tu,toi:'chi',tien:v.fcTien,ghichu:v.fcGhi,nhom:st.nhom||doanLoai(v.fcGhi),ngay:v.fcNgay}));}
   });
 }
-function thuGoc(a){
+function thuGoc(a,goiY){
   moForm({title:'Thu gốc · '+esc(a.ten),st:{tk:S.lastTien},f:[
-    {t:'tien',id:'fgTien',lbl:'Số tiền'},
+    {t:'tien',id:'fgTien',lbl:'Số tiền',val:goiY>0?fmt(goiY):undefined},
     {t:'chips',k:'tk',lbl:'Vào',list:()=>tienL()},
     {t:'date',id:'fgNgay',lbl:'Ngày'}
   ],
@@ -1635,6 +1653,8 @@ document.querySelector('.wrap').addEventListener('click',e=>{
   const lg8=e.target.closest('[data-gat]');if(lg8){gatLai(get(lg8.dataset.gat));return;}
   const lt=e.target.closest('[data-lai-thu]');if(lt){const a=get(lt.dataset.laiThu);thuLai(a,laiThuGoiY(a,totals()));return;}
   const lr=e.target.closest('[data-lai-tra]');if(lr){traLai(get(lr.dataset.laiTra));return;}
+  const lh=e.target.closest('[data-lai-het]');if(lh){thuHet(get(lh.dataset.laiHet));return;}
+  const lgc=e.target.closest('[data-lai-goc]');if(lgc){const a=get(lgc.dataset.laiGoc);thuGoc(a,totals().b[a.id]);return;}
   const ls=e.target.closest('[data-lai-sua]');if(ls){suaVay(get(ls.dataset.laiSua));return;}
   const bv=e.target.closest('[data-bo-vd]');if(bv){S.coVd=false;render();return;}
   const tb=e.target.closest('[data-v]');if(tb){moTab(tb.dataset.v);return;}
