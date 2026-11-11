@@ -314,6 +314,7 @@ table.sk{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
 .pill.moi{background:transparent;border:1.5px dashed var(--accent);color:var(--accent)}
 .pill.mo{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
 .pick{display:flex;flex-wrap:wrap;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+.pick.lenh{padding-top:0;border-top:0}
 .bar-in{display:flex;gap:8px;min-width:0}
 .bar-in input{flex:1;min-width:0;height:52px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface-2);padding:0 14px;font-size:17px}
 .bar-in input:focus{outline:none;border-color:var(--accent)}
@@ -338,8 +339,6 @@ table.sk{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
 .fld input{height:48px;width:100%;min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:0 12px;font-size:17px}
 .amt-row{display:flex;gap:8px}
 .fld .amt-row input.amt{flex:1;height:56px;font-family:var(--f-display);font-weight:700;font-size:26px;font-variant-numeric:tabular-nums}
-.sfx{display:flex;gap:6px}
-.sfx button{width:46px;height:56px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:16px}
 .amt-val{font-size:14px;font-weight:600;color:var(--muted);min-height:20px}
 .fld.sat{margin-top:-6px}
 .phieu{background:var(--surface);border:1.6px solid var(--vien,var(--line));border-radius:14px;padding:14px 16px 12px}
@@ -855,13 +854,15 @@ function theThu(a,T){
       :goc>0?`<div class="tl-nut mot"><button type="button" class="btn pri tl-btn" data-lai-goc="${a.id}">Đã trả gốc</button></div>`:''}</div>`;
 }
 /* Principal and interest back in one go: two lines, Thu gốc and Thu lãi, the same day into the same account. */
-function thuHet(a){
-  const T=totals(), L=laiInfo(a,T), goc=Math.max(0,T.b[a.id]), lai=L?Math.max(0,L.tong-L.da):0, so=v=>Number.isFinite(v)?v:0;
-  moForm({title:'Trả gốc + lãi · '+esc(a.ten),st:{tk:S.lastTien},f:[
+function gocLaiCon(a){const T=totals(), L=laiInfo(a,T);return {goc:Math.max(0,T.b[a.id]),lai:L?Math.max(0,L.tong-L.da):0};}
+function thuHet(a,o){
+  o=o||{};
+  const c=gocLaiCon(a), goc=o.goc!=null?o.goc:c.goc, lai=o.lai!=null?o.lai:c.lai, so=v=>Number.isFinite(v)?v:0;
+  moForm({title:'Trả gốc + lãi · '+esc(a.ten),st:{tk:o.tk||S.lastTien},f:[
     {t:'tien',id:'fhGoc',lbl:'Gốc',val:fmt(goc)},
     {t:'tien',id:'fhLai',lbl:'Lãi',val:fmt(lai)},
     {t:'chips',k:'tk',lbl:'Vào',list:()=>tienL()},
-    {t:'date',id:'fhNgay',lbl:'Ngày'}
+    {t:'date',id:'fhNgay',lbl:'Ngày',val:o.ngay}
   ],
   ok:(st,v)=>!!st.tk&&so(v.fhGoc)>=0&&so(v.fhLai)>=0&&so(v.fhGoc)+so(v.fhLai)>0,
   save:(st,v)=>{
@@ -1054,7 +1055,7 @@ function moTab(v){
 function showSheet(){ov.hidden=false;document.body.classList.add('lock');}
 function closeSheet(){ov.hidden=true;document.body.classList.remove('lock');sheet.innerHTML='';FM=null;sauThaoTac();}
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>{t.hidden=true;},2200);}
-const amtInput=(id,val,tron)=>`<div class="amt-row"><input id="${id}" class="amt${tron?' tron':''}" inputmode="${tron?'numeric':'decimal'}" autocomplete="off" placeholder="0" value="${val!=null?esc(String(val)):''}">${tron?'':`<div class="sfx">${['k','tr','tỷ'].map(s=>`<button type="button" data-sfx="${s}" data-for="${id}">${s}</button>`).join('')}</div>`}</div>`;
+const amtInput=(id,val)=>`<div class="amt-row"><input id="${id}" class="amt" inputmode="numeric" autocomplete="off" placeholder="0" value="${val!=null?esc(String(val)):''}"></div>`;
 const effRows=rows=>rows.map(r=>`<span>${esc(r[0])}</span><div><span class="o">${fmt(r[1])}</span><i>→</i><b class="${r[3]||''}">${fmt(r[2])}</b></div>`).join('');
 function themAcc(ten,nhom){
   let at=-1;S.acc.forEach((x,i)=>{if(x.nhom===nhom)at=i;});
@@ -1085,12 +1086,11 @@ function openAcc(id){
   const T=totals(), b=T.b[id], isNo=a.nhom==='no';
   sheet.innerHTML=`<div class="sh-h"><h2>${esc(a.ten)}</h2><span class="tag">${NHOM[a.nhom]}</span></div>
     <div class="big">${fmt(b)}</div>
-    <div class="fld"><label for="aMoi">${isNo?'Còn nợ mới':'Số dư mới'}</label>${amtInput('aMoi')}<div class="amt-val" id="aMoiV"></div></div>
+    <div class="fld"><label for="aMoi">${isNo?'Còn nợ mới':'Số dư mới'}</label>${amtInput('aMoi')}</div>
     <div class="eff" id="aEff" hidden></div>
     <div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="aLuu" disabled>Lưu</button></div>`;
   const upd=()=>{
     const v=parseTien($('#aMoi').value), good=Number.isFinite(v)&&v!==b;
-    $('#aMoiV').textContent=Number.isFinite(v)?fmt(v)+' đ':'';
     $('#aLuu').disabled=!good;
     const eff=$('#aEff');
     if(!good){eff.hidden=true;return;}
@@ -1170,9 +1170,9 @@ function suaVay(a){
   const gocOf=v=>motCho?v.fsTien:conGoc, laiOf=(st,v)=>laiNhap(st.dv,v.fsLai,gocOf(v));
   moForm({title:'Sửa · '+esc(a.ten),st:{dv:'u'},f:[
     {t:'html',id:'fsPhieu',ve:(st,v)=>phieuVay(a.ten,gocOf(v),coNgay?v.fsNgay:nv,laiOf(st,v))},
-    ...(motCho?[{t:'tien',id:'fsTien',lbl:'Số tiền gốc',val:fmt(dau.tien),tron:true}]:[]),
+    ...(motCho?[{t:'tien',id:'fsTien',lbl:'Số tiền gốc',val:fmt(dau.tien)}]:[]),
     {t:'seg',k:'dv',lbl:'Lãi',opts:DV_LAI},
-    {t:'tien',id:'fsLai',tron:true,sat:true,val:cu?fmt(cu):'',duoi:(st,v)=>doiLai(st.dv,v.fsLai,gocOf(v))},
+    {t:'tien',id:'fsLai',sat:true,val:cu?fmt(cu):'',duoi:(st,v)=>doiLai(st.dv,v.fsLai,gocOf(v))},
     ...(coNgay?[{t:'date',id:'fsNgay',lbl:'Ngày vay',val:nv}]:[])
   ],
   ok:(st,v)=>!Number.isNaN(v.fsLai)&&(!motCho||v.fsTien>0)&&(laiOf(st,v)!==cu||(coNgay&&v.fsNgay!==nv)||(motCho&&v.fsTien!==dau.tien)),
@@ -1191,10 +1191,10 @@ function openDat(i){
   const d=S.dat[i];if(!d)return;
   sheet.innerHTML=`<div class="sh-h"><h2>${esc(d.ten)}</h2><span class="tag">Đầu tư</span></div>
     <div class="kvs"><div class="kv"><span>Giá mua</span><b>${fmt(d.gia)}</b></div>${d.giaHT!=null?`<div class="kv"><span>Giá hiện tại</span><b>${fmt(d.giaHT)}</b></div>`:''}</div>
-    <div class="fld"><label for="gHT">Giá hiện tại</label>${amtInput('gHT')}<div class="amt-val" id="gHTV"></div></div>
+    <div class="fld"><label for="gHT">Giá hiện tại</label>${amtInput('gHT')}</div>
     <div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="gLuu" disabled>Lưu</button></div>`;
   const inp=$('#gHT');
-  inp.addEventListener('input',()=>{const v=parseTien(inp.value);$('#gHTV').textContent=Number.isFinite(v)?fmt(v)+' đ':'';$('#gLuu').disabled=!(Number.isFinite(v)&&v>0);});
+  inp.addEventListener('input',()=>{const v=parseTien(inp.value);$('#gLuu').disabled=!(Number.isFinite(v)&&v>0);});
   $('#gLuu').addEventListener('click',()=>{const v=parseTien(inp.value);if(!(Number.isFinite(v)&&v>0))return;d.giaHT=v;closeSheet();render();toast('Đã lưu');});
   showSheet();
 }
@@ -1209,15 +1209,13 @@ function moForm(c){
     if(x.t==='seg')return `${x.lbl?`<span class="lbl">${x.lbl}</span>`:''}<div class="segf"></div>`;
     if(x.t==='chips')return `<span class="lbl"></span><div class="chips"></div>`;
     if(x.t==='html')return `<div id="${x.id}"></div>`;
-    if(x.t==='tien')return `${x.lbl?`<label for="${x.id}">${x.lbl}</label>`:''}${amtInput(x.id,x.val,x.tron)}${x.tron&&!x.duoi?'':`<div class="amt-val" id="${x.id}V"></div>`}`;
+    if(x.t==='tien')return `${x.lbl?`<label for="${x.id}">${x.lbl}</label>`:''}${amtInput(x.id,x.val)}${x.duoi?`<div class="amt-val" id="${x.id}V"></div>`:''}`;
     if(x.t==='date')return `<label for="${x.id}">${x.lbl}</label><input type="date" id="${x.id}" value="${x.val||isoToday()}">`;
     return `<label for="${x.id}">${x.lbl}</label><input id="${x.id}" autocomplete="off" enterkeyhint="done"${x.t==='so'?' inputmode="numeric"':''} value="${x.val!=null?esc(String(x.val)):''}">`;
   };
   sheet.innerHTML=`<div class="sh-h"><h2>${c.title}</h2></div>`
     +c.f.map((x,i)=>`<div class="fld${x.sat?' sat':''}" data-fi="${i}">${field(x)}</div>`).join('')
     +`<div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="fmLuu" disabled>Lưu</button></div>`;
-  // whole numbers typed without k/tr/tỷ get their dots as they are typed
-  sheet.querySelectorAll('input.tron').forEach(inp=>inp.addEventListener('input',()=>{if(/^[\d.]*$/.test(inp.value)){const d=inp.value.replace(/\D/g,'');inp.value=d?fmt(+d):'';}}));
   sheet.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',()=>{if(c.onInput&&c.onInput(FM.st,giaTri()))veForm();else kiemForm();}));
   sheet.querySelectorAll('input[type=date]').forEach(inp=>inp.addEventListener('change',kiemForm));
   $('#fmLuu').addEventListener('click',()=>{if(!kiemForm())return;c.save(FM.st,giaTri());closeSheet();render();toast('Đã lưu');});
@@ -1255,7 +1253,7 @@ function kiemForm(){
   FM.c.f.forEach(x=>{
     if(x.t==='html'){const h=document.getElementById(x.id);if(h)h.innerHTML=x.ve(FM.st,v);return;}
     if(x.t!=='tien')return;const o=document.getElementById(x.id+'V');
-    if(o)o.textContent=x.duoi?x.duoi(FM.st,v):Number.isFinite(v[x.id])&&v[x.id]>0?fmt(v[x.id])+' đ':'';
+    if(o)o.textContent=x.duoi(FM.st,v);
   });
   const ok=!!FM.c.ok(FM.st,v), b=$('#fmLuu');if(b)b.disabled=!ok;
   return ok;
@@ -1294,9 +1292,9 @@ function themVay(ai){
   moForm({title:'Cho vay',st:{ai:ai||null,dv:'u',tu:S.lastTien},f:[
     {t:'chips',k:'ai',lbl:'Ai',list:()=>nguoiL(),moi:'vay'},
     {t:'html',id:'fvPhieu',ve:(st,v)=>phieuVay(tenOf(st),v.fvTien,v.fvNgay,laiOf(st,v))},
-    {t:'tien',id:'fvTien',lbl:'Số tiền',tron:true},
+    {t:'tien',id:'fvTien',lbl:'Số tiền'},
     {t:'seg',k:'dv',lbl:'Lãi',opts:DV_LAI,show:st=>!coLai(st)},
-    {t:'tien',id:'fvLai',tron:true,sat:true,duoi:(st,v)=>doiLai(st.dv,v.fvLai,v.fvTien),show:st=>!coLai(st)},
+    {t:'tien',id:'fvLai',sat:true,duoi:(st,v)=>doiLai(st.dv,v.fvLai,v.fvTien),show:st=>!coLai(st)},
     {t:'date',id:'fvNgay',lbl:'Ngày vay'},
     {t:'chips',k:'tu',lbl:'Lấy từ',list:()=>tienL()}
   ],
@@ -1484,13 +1482,15 @@ const VIEC={
   xai:{ten:'Xài',s:[{list:()=>[...tienL(),...S.acc.filter(a=>a.the)],def:1}],tpl:['$','bằng',0],map:a=>({tu:a,toi:'chi'})},
   vao:{ten:'Tiền vào',s:[{list:tienL,def:1}],tpl:['$','vào',0],map:a=>({tu:'thu',toi:a})},
   chovay:{ten:'Cho vay',s:[{list:nguoiL,moi:'vay',hoi:'Ai?'},{list:tienL,def:1}],tpl:[0,'$','từ',1],map:(a,b)=>({tu:b,toi:a})},
-  thuno:{ten:'Thu nợ',s:[{list:nguoiL,hoi:'Ai?'},{list:tienL,def:1}],tpl:[0,'$','vào',1],map:(a,b)=>({tu:a,toi:b})},
+  thuno:{ten:'Thu gốc',s:[{list:nguoiL,hoi:'Ai?'},{list:tienL,def:1}],tpl:[0,'$','vào',1],map:(a,b)=>({tu:a,toi:b})},
+  thulai:{ten:'Thu lãi',s:[{list:nguoiL,hoi:'Ai?'},{list:tienL,def:1}],tpl:[0,'$','vào',1],map:(a,b)=>({tu:'thu',toi:b})},
+  goclai:{ten:'Gốc + lãi',s:[{list:nguoiL,hoi:'Ai?'},{list:tienL,def:1}],tpl:[0,'$','vào',1],map:(a,b)=>({tu:a,toi:b})},
   trano:{ten:'Trả nợ',s:[{list:noL,hoi:'Ai?'},{list:tienL,def:1}],tpl:[0,'$','từ',1],map:(a,b)=>({tu:b,toi:a})},
   vaythem:{ten:'Vay thêm',s:[{list:()=>noL().filter(a=>!a.the),moi:'no',hoi:'Ai?'},{list:tienL,def:1}],tpl:[0,'$','vào',1],map:(a,b)=>({tu:a,toi:b})},
   chuyen:{ten:'Chuyển',s:[{list:tienL,def:1},{list:tienL,hoi:'Sang?'}],tpl:['$','từ',0,'sang',1],map:(a,b)=>({tu:a,toi:b})},
   xaynha:{ten:'Xây nhà',s:[{list:tienL,def:1}],tpl:['$','từ',0],map:a=>({tu:a,toi:'xn'})}
 };
-const VIEC_TH=['xai','vao','chovay','thuno','trano','vaythem','chuyen','xaynha'];
+const VIEC_TH=['xai','vao','chovay','thuno','thulai','goclai','trano','vaythem','chuyen','xaynha'];
 const bo=s=>String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[đĐ]/g,'d').toLowerCase();
 const XUNG=/^(a|anh|c|chi|chu|co|em|e|ong|ba|bac|cau|di|thim)\s+/;
 const HON=new Set(['a','anh','c','chi','chu','co','em','e','ong','ba','bac','cau','di','thim']);
@@ -1498,26 +1498,26 @@ const ALIAS={vcb:['vietcom','vietcombank'],tech:['tcb','techcom','techcombank'],
 const KW=new Map([
   ['tra lai','tra'],['gui lai','tra'],['hom qua','homqua'],['thanh toan','dong'],['thu nhap','thu'],['tien vao','thu'],['xay nha','xay'],
   ['rut','rut'],['lai~','lai'],['lai','lai'],['cho','cho'],['vay','vay'],['muon','muon'],['tra','tra'],['hoan','tra'],['dong','dong'],
-  ['xay','xay'],['tho','xay'],['chuyen','chuyen'],['luong','thu'],['nhan','thu'],['thuong','thu'],
+  ['xay','xay'],['tho','xay'],['goc','goc'],['chuyen','chuyen'],['luong','thu'],['nhan','thu'],['thuong','thu'],
   ['xai','xai'],['mua','xai'],['tieu','xai'],['hqua','homqua'],
   ['tu','tu'],['sang','sang'],['qua','sang'],['nap','sang'],['vao','sang'],['bang','bang']
 ]);
 const UNIT=/^(k|tr|ty|ti|trieu|nghin|ngan|d|vnd|dong)$/;
-const AN={xai:['xai'],vao:['thu'],chovay:['cho','vay','muon'],thuno:['tra','dong'],trano:['tra','dong'],vaythem:['vay','muon'],chuyen:['chuyen','rut'],xaynha:['xay']};
+const AN={xai:['xai'],vao:['thu'],chovay:['cho','vay','muon'],thuno:['tra','dong','goc'],thulai:['lai','tra','dong','thu'],goclai:['goc','lai','tra','dong','thu'],trano:['tra','dong'],vaythem:['vay','muon'],chuyen:['chuyen','rut'],xaynha:['xay']};
 
 function docCau(raw,ep){
   /* "lãi" (interest) and "lại" (again) both strip to "lai" — keep the accented one apart */
   const toks=raw.trim().split(/\s+/).filter(Boolean).map(r=>({r,n:/^lãi/i.test(r)?'lai~':bo(r).replace(/[.,;:!?]+$/,''),dung:false}));
-  let tien=null, ngay=isoToday();
+  let tien=null, ngay=isoToday();const soTien=[];
   for(let i=0;i<toks.length;i++){
     const t=toks[i];
     const dm=t.n.match(/^(\d{1,2})[\/-](\d{1,2})$/);
     if(dm){ngay=new Date().getFullYear()+'-'+dm[2].padStart(2,'0')+'-'+dm[1].padStart(2,'0');t.dung=true;continue;}
-    if(tien!==null||!/^\d/.test(t.n))continue;
+    if(!/^\d/.test(t.n))continue;
     let s=t.n, nx=null;
     if(/^\d[\d.,]*$/.test(s)&&toks[i+1]&&UNIT.test(toks[i+1].n)){s+=toks[i+1].n;nx=toks[i+1];}
     const v=parseTien(s.replace(/(vnd|dong|d)$/,''));
-    if(Number.isFinite(v)&&v>0){tien=v;t.dung=true;if(nx)nx.dung=true;}
+    if(Number.isFinite(v)&&v>0){if(tien===null)tien=v;soTien.push({v,i});t.dung=true;if(nx){nx.dung=true;i++;}}
   }
   /* account names, longest phrase first */
   const ten=new Map();
@@ -1553,7 +1553,9 @@ function docCau(raw,ep){
   let viec=ep||null;
   if(!viec){
     if(co('rut'))viec='chuyen';
-    else if(co('lai')&&(P.length||co('tra')||co('thu')))viec='vao';
+    else if(P.length&&co('goc')&&co('lai'))viec='goclai';
+    else if(P.length&&co('lai'))viec='thulai';
+    else if(co('lai')&&(co('tra')||co('thu')))viec='vao';
     else if(co('cho')&&(P.length||co('vay')||co('muon')))viec='chovay';
     else if(P.length&&(co('tra')||co('dong')))viec='thuno';
     else if((L.length||C)&&(co('tra')||co('dong')))viec='trano';
@@ -1597,15 +1599,37 @@ function docCau(raw,ep){
   let note=rest.map(t=>t.r).join(' ');
   if(viec)VIEC[viec].s.forEach((sd,i)=>{if(!slots[i]&&sd.moi&&note){slots[i]={moi:note};note='';}});
   if(laiVao)note=['lãi',...P.map(m=>nameOf(m.id)),note].filter(Boolean).join(' ');
-  return {viec,tien,slots,note,ngay,nguoi:laiVao&&P[0]?P[0].id:null};
+  let goc=null, lai=null;
+  if(viec==='goclai'){
+    const con=[];
+    for(const x of soTien){const k=kAt[x.i-1];if(k==='lai'&&lai===null)lai=x.v;else if(k==='goc'&&goc===null)goc=x.v;else con.push(x.v);}
+    if(goc===null&&con.length)goc=con.shift();
+    if(lai===null&&con.length)lai=con.shift();
+  }
+  return {viec,tien,soTien:soTien.map(x=>x.v),goc,lai,slots,note,ngay,nguoi:laiVao&&P[0]?P[0].id:null};
+}
+/* "/chovay …", "/xaynha …": a slash word at the start picks the kind; the rest is read as before.
+   A word cut short counts when only one kind starts with it ("/cho" = /chovay). */
+const LENH=[['xai','/xai'],['vao','/tienvao'],['chovay','/chovay'],['thuno','/thugoc'],['thulai','/thulai'],['goclai','/goclai'],['trano','/trano'],['vaythem','/vaythem'],['chuyen','/chuyen'],['xaynha','/xaynha']];
+function docLenh(raw){
+  const m=raw.match(/^\s*(\/\S*)(\s|$)/);if(!m)return null;
+  const g=bo(m[1]), hop=LENH.filter(([,l])=>l.startsWith(g)), dung=LENH.find(([,l])=>l===g)||(hop.length===1?hop[0]:null);
+  return {viec:dung?dung[0]:null,hop,con:raw.slice(m[0].length),go:!m[2]};
 }
 function docHet(){
-  const d=docCau(cau.value,tay.viec||null);
+  const l=docLenh(cau.value);
+  const d=docCau(l?l.con:cau.value,tay.viec||(l&&l.viec)||null);
   if(d.viec&&tay.s)VIEC[d.viec].s.forEach((sd,i)=>{const id=tay.s[i];if(id&&sd.list().some(a=>a.id===id))d.slots[i]={id};});
   return d;
 }
+/* Gốc + lãi shown and saved: what was typed, else the balance left and the interest not yet paid */
+function gocLaiCau(d){
+  const a=d.slots[0]&&!d.slots[0].moi?get(d.slots[0].id):null, c=a?gocLaiCon(a):{goc:0,lai:0};
+  return {a,goc:d.goc!==null?d.goc:c.goc,lai:d.lai!==null?d.lai:c.lai};
+}
 function hopLe(d){
-  if(!d||!d.viec||!(d.tien>0))return false;
+  if(d&&d.viec==='goclai')return !!d.slots[0]&&!d.slots[0].moi&&!!d.slots[1]&&d.soTien.length<=2;
+  if(!d||!d.viec||!(d.tien>0)||d.soTien.length>1)return false;
   if(VIEC[d.viec].s.some((_,i)=>!d.slots[i]))return false;
   if(d.viec==='chuyen'&&d.slots[0].id===d.slots[1].id)return false;
   return true;
@@ -1618,8 +1642,16 @@ function pillSlot(d,i){
 }
 function veDoc(){
   if(!cau.value.trim()){docEl.hidden=true;docEl.innerHTML='';luu.disabled=true;D=null;tay={};pk=null;return;}
+  const l=docLenh(cau.value);
+  if(l&&l.go){
+    D=null;luu.disabled=true;docEl.hidden=false;
+    docEl.innerHTML=`<div class="pick lenh">${(l.hop.length?l.hop:LENH).map(([k,t])=>`<button type="button" class="chip${k===l.viec?' on':''}" data-lenh="${k}">${t}</button>`).join('')}</div>`;
+    return;
+  }
   const d=D=docHet();
-  const so=d.tien>0?`<span class="so">${fmt(d.tien)}</span>`:`<span class="pill thieu">Số tiền?</span>`;
+  let so=d.tien>0?`<span class="so">${fmt(d.tien)}</span>`:`<span class="pill thieu">Số tiền?</span>`;
+  if(d.viec==='goclai'){const g=gocLaiCau(d);so=`<span class="so">${fmt(g.goc)}</span><span class="w">+</span><span class="so">${fmt(g.lai)}</span>`;}
+  else if(d.soTien.length>1)so+=d.soTien.slice(1).map(v=>`<span class="pill thieu">${fmt(v)}</span>`).join('');
   let h=`<button type="button" class="pill ${d.viec?'v':'thieu'}${pk==='v'?' mo':''}" data-slot="v">${d.viec?VIEC[d.viec].ten:'Chọn'}</button>`;
   h+=(d.viec?VIEC[d.viec].tpl:['$']).map(x=>x==='$'?so:typeof x==='number'?pillSlot(d,x):`<span class="w">${x}</span>`).join('');
   if(d.note)h+=`<span class="note">· ${esc(d.note)}</span>`;
@@ -1637,10 +1669,20 @@ function veDoc(){
 }
 function luuCau(){
   const d=D;if(!hopLe(d))return;
+  if(d.viec==='goclai'){
+    const g=gocLaiCau(d), tk=d.slots[1].id;
+    cau.value='';tay={};pk=null;veDoc();
+    if(d.goc===null||d.lai===null){thuHet(g.a,{tk,goc:g.goc,lai:g.lai,ngay:d.ngay});return;}
+    if(g.goc>0)addLog(vanTat({viec:'thuno',tu:g.a.id,toi:tk,tien:g.goc,ngay:d.ngay}));
+    if(g.lai>0)addLog(vanTat({viec:'vao',tu:'thu',toi:tk,tien:g.lai,ghichu:'lãi '+g.a.ten,nguoi:g.a.id,ngay:d.ngay}));
+    S.lastTien=tk;render();sauThaoTac();toast(`Đã lưu · ${nameOf(tk)} còn ${fmt(bal(tk))}`);
+    return;
+  }
   const V=VIEC[d.viec];
   const ids=V.s.map((sd,i)=>d.slots[i].moi?themAcc(d.slots[i].moi,sd.moi):d.slots[i].id);
   const {tu,toi}=V.map(ids[0],ids[1]);
-  addLog({id:nid(),loai:'chuyen',viec:d.viec,ngay:d.ngay,tu,toi,tien:d.tien,ghichu:d.note,nguoi:d.nguoi||null,nhom:d.viec==='xai'?doanLoai(d.note):null,ts:Date.now()});
+  if(d.viec==='thulai')addLog(vanTat({viec:'vao',tu,toi,tien:d.tien,ghichu:['lãi '+nameOf(ids[0]),d.note].filter(Boolean).join(' '),nguoi:ids[0],ngay:d.ngay}));
+  else addLog({id:nid(),loai:'chuyen',viec:d.viec,ngay:d.ngay,tu,toi,tien:d.tien,ghichu:d.note,nguoi:d.nguoi||null,nhom:d.viec==='xai'?doanLoai(d.note):null,ts:Date.now()});
   const ti=ids.find(id=>get(id)&&get(id).nhom==='tien');if(ti)S.lastTien=ti;
   cau.value='';tay={};pk=null;veDoc();render();sauThaoTac();
   toast(ti?`Đã lưu · ${nameOf(ti)} còn ${fmt(bal(ti))}`:'Đã lưu');
@@ -1654,21 +1696,17 @@ $('#dock').addEventListener('mousedown',e=>{if(e.target.closest('button'))e.prev
 docEl.addEventListener('click',e=>{
   const p=e.target.closest('[data-slot]');
   if(p){const s=p.dataset.slot==='v'?'v':+p.dataset.slot;pk=pk===s?null:s;veDoc();return;}
+  const ln=e.target.closest('[data-lenh]');
+  if(ln){cau.value=LENH.find(([k])=>k===ln.dataset.lenh)[1]+' ';tay={};pk=null;cau.focus();veDoc();return;}
   const pv=e.target.closest('[data-pv]');
   if(pv){tay={viec:pv.dataset.pv};pk=null;veDoc();return;}
   const pa=e.target.closest('[data-pa]');
   if(pa&&D&&D.viec&&typeof pk==='number'){tay.viec=D.viec;tay.s=tay.s||[];tay.s[pk]=pa.dataset.pa;pk=null;veDoc();}
 });
 
-sheet.addEventListener('pointerdown',e=>{if(e.target.closest('[data-sfx]'))e.preventDefault();});
-sheet.addEventListener('mousedown',e=>{if(e.target.closest('[data-sfx]'))e.preventDefault();});
+// money boxes: whole numbers get their dots as they are typed, before any form reads the box
+sheet.addEventListener('input',e=>{const inp=e.target;if(!inp.classList||!inp.classList.contains('amt')||!/^[\d.]*$/.test(inp.value))return;const d=inp.value.replace(/\D/g,'');inp.value=d?fmt(+d):'';},true);
 sheet.addEventListener('click',e=>{
-  const sf=e.target.closest('[data-sfx]');
-  if(sf){
-    const inp=document.getElementById(sf.dataset.for);
-    inp.value=inp.value.replace(/\s*(k|tr|tỷ)\s*$/i,'')+sf.dataset.sfx;
-    inp.dispatchEvent(new Event('input',{bubbles:true}));inp.focus();return;
-  }
   const sg=e.target.closest('[data-sk]');if(sg&&FM){FM.st[sg.dataset.sk]=sg.dataset.sv;veForm();return;}
   const cc=e.target.closest('[data-ck]');if(cc&&FM){FM.st[cc.dataset.ck]=cc.dataset.cv;FM.st[cc.dataset.ck+'Tay']=true;veForm();}
 });
