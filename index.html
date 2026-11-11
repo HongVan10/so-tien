@@ -341,6 +341,17 @@ table.sk{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
 .sfx{display:flex;gap:6px}
 .sfx button{width:46px;height:56px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:16px}
 .amt-val{font-size:14px;font-weight:600;color:var(--muted);min-height:20px}
+.fld.sat{margin-top:-6px}
+.phieu{background:var(--surface);border:1.6px solid var(--vien,var(--line));border-radius:14px;padding:14px 16px 12px}
+.p-ten{font-family:var(--f-display);font-size:20px;font-weight:700}
+.p-so{font-family:var(--f-display);font-size:30px;font-weight:700;margin:2px 0 8px}
+.p-dong{display:flex;justify-content:space-between;gap:10px;padding-top:4px;font-size:15px}
+.p-dong span{color:var(--muted)}
+.p-dong b{font-weight:700}
+.p-dong.dau{position:relative;padding-top:8px;border-top:2px dashed var(--line)}
+.p-dong.dau::before,.p-dong.dau::after{content:"";position:absolute;top:-10px;width:18px;height:18px;border-radius:50%;background:var(--surface);border:1.6px solid var(--vien,var(--line));transform:rotate(45deg)}
+.p-dong.dau::before{left:-26px;border-left-color:transparent;border-bottom-color:transparent}
+.p-dong.dau::after{right:-26px;border-right-color:transparent;border-top-color:transparent}
 .eff{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;background:var(--surface-2);border-radius:12px;padding:10px 12px;font-size:14px}
 .eff>span{color:var(--muted);font-weight:600}
 .eff>div{text-align:right;font-variant-numeric:tabular-nums}
@@ -1043,7 +1054,7 @@ function moTab(v){
 function showSheet(){ov.hidden=false;document.body.classList.add('lock');}
 function closeSheet(){ov.hidden=true;document.body.classList.remove('lock');sheet.innerHTML='';FM=null;sauThaoTac();}
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>{t.hidden=true;},2200);}
-const amtInput=(id,val)=>`<div class="amt-row"><input id="${id}" class="amt" inputmode="decimal" autocomplete="off" placeholder="0" value="${val!=null?esc(String(val)):''}"><div class="sfx">${['k','tr','tỷ'].map(s=>`<button type="button" data-sfx="${s}" data-for="${id}">${s}</button>`).join('')}</div></div>`;
+const amtInput=(id,val,tron)=>`<div class="amt-row"><input id="${id}" class="amt${tron?' tron':''}" inputmode="${tron?'numeric':'decimal'}" autocomplete="off" placeholder="0" value="${val!=null?esc(String(val)):''}">${tron?'':`<div class="sfx">${['k','tr','tỷ'].map(s=>`<button type="button" data-sfx="${s}" data-for="${id}">${s}</button>`).join('')}</div>`}</div>`;
 const effRows=rows=>rows.map(r=>`<span>${esc(r[0])}</span><div><span class="o">${fmt(r[1])}</span><i>→</i><b class="${r[3]||''}">${fmt(r[2])}</b></div>`).join('');
 function themAcc(ten,nhom){
   let at=-1;S.acc.forEach((x,i)=>{if(x.nhom===nhom)at=i;});
@@ -1153,17 +1164,21 @@ function suaDong(e){
    Interest is worked out again from the loan date at the rate. A loan kept in the Vay tab gets its date and rate
    written back there; a loan that only exists in the app moves its first entry, which is where its date comes from. */
 function suaVay(a){
-  const cu=String(a.lai||0), list=LAI.some(x=>x.id===cu)?LAI:[...LAI,{id:cu,ten:shortU(+cu)}];
+  const cu=a.lai||0, conGoc=totals().b[a.id];
   const dau=moDau(a), nv=ngayVayOf(a), coNgay=!!a.so||!!dau;
   const motCho=!!dau&&dau.viec==='chovay'&&S.log.filter(e=>e.viec==='chovay'&&e.toi===a.id).length===1;
-  moForm({title:'Sửa · '+esc(a.ten),st:{lai:cu},f:[
-    ...(motCho?[{t:'tien',id:'fsTien',lbl:'Số tiền gốc',val:fmt(dau.tien)}]:[]),
-    ...(coNgay?[{t:'date',id:'fsNgay',lbl:'Ngày vay',val:nv}]:[]),
-    {t:'chips',k:'lai',lbl:'Lãi/ngày/100tr',list:()=>list}
+  const gocOf=v=>motCho?v.fsTien:conGoc, laiOf=(st,v)=>laiNhap(st.dv,v.fsLai,gocOf(v));
+  moForm({title:'Sửa · '+esc(a.ten),st:{dv:'u'},f:[
+    {t:'html',id:'fsPhieu',ve:(st,v)=>phieuVay(a.ten,gocOf(v),coNgay?v.fsNgay:nv,laiOf(st,v))},
+    ...(motCho?[{t:'tien',id:'fsTien',lbl:'Số tiền gốc',val:fmt(dau.tien),tron:true}]:[]),
+    {t:'seg',k:'dv',lbl:'Lãi',opts:DV_LAI},
+    {t:'tien',id:'fsLai',tron:true,sat:true,val:cu?fmt(cu):'',duoi:(st,v)=>doiLai(st.dv,v.fsLai,gocOf(v))},
+    ...(coNgay?[{t:'date',id:'fsNgay',lbl:'Ngày vay',val:nv}]:[])
   ],
-  ok:(st,v)=>(!motCho||v.fsTien>0)&&(st.lai!==cu||(coNgay&&v.fsNgay!==nv)||(motCho&&v.fsTien!==dau.tien)),
+  ok:(st,v)=>!Number.isNaN(v.fsLai)&&(!motCho||v.fsTien>0)&&(laiOf(st,v)!==cu||(coNgay&&v.fsNgay!==nv)||(motCho&&v.fsTien!==dau.tien)),
   save:(st,v)=>{
-    if(st.lai!==cu){const n=+st.lai;if(n)a.lai=n;else delete a.lai;ghiLaiVay(a);}
+    const r=laiOf(st,v);
+    if(r!==cu){if(r)a.lai=r;else delete a.lai;ghiLaiVay(a);}
     if(dau){
       const doi=v.fsNgay!==dau.ngay||(motCho&&v.fsTien!==dau.tien);
       dau.ngay=v.fsNgay;if(motCho)dau.tien=v.fsTien;
@@ -1191,16 +1206,20 @@ const giaiMoi=(v,nhom)=>String(v).startsWith('moi:')?themAcc(v.slice(4),nhom):v;
 function moForm(c){
   FM={c,st:{...c.st}};
   const field=x=>{
-    if(x.t==='seg')return `<div class="segf"></div>`;
+    if(x.t==='seg')return `${x.lbl?`<span class="lbl">${x.lbl}</span>`:''}<div class="segf"></div>`;
     if(x.t==='chips')return `<span class="lbl"></span><div class="chips"></div>`;
-    if(x.t==='tien')return `<label for="${x.id}">${x.lbl}</label>${amtInput(x.id,x.val)}<div class="amt-val" id="${x.id}V"></div>`;
+    if(x.t==='html')return `<div id="${x.id}"></div>`;
+    if(x.t==='tien')return `${x.lbl?`<label for="${x.id}">${x.lbl}</label>`:''}${amtInput(x.id,x.val,x.tron)}${x.tron&&!x.duoi?'':`<div class="amt-val" id="${x.id}V"></div>`}`;
     if(x.t==='date')return `<label for="${x.id}">${x.lbl}</label><input type="date" id="${x.id}" value="${x.val||isoToday()}">`;
     return `<label for="${x.id}">${x.lbl}</label><input id="${x.id}" autocomplete="off" enterkeyhint="done"${x.t==='so'?' inputmode="numeric"':''} value="${x.val!=null?esc(String(x.val)):''}">`;
   };
   sheet.innerHTML=`<div class="sh-h"><h2>${c.title}</h2></div>`
-    +c.f.map((x,i)=>`<div class="fld" data-fi="${i}">${field(x)}</div>`).join('')
+    +c.f.map((x,i)=>`<div class="fld${x.sat?' sat':''}" data-fi="${i}">${field(x)}</div>`).join('')
     +`<div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="fmLuu" disabled>Lưu</button></div>`;
+  // whole numbers typed without k/tr/tỷ get their dots as they are typed
+  sheet.querySelectorAll('input.tron').forEach(inp=>inp.addEventListener('input',()=>{if(/^[\d.]*$/.test(inp.value)){const d=inp.value.replace(/\D/g,'');inp.value=d?fmt(+d):'';}}));
   sheet.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',()=>{if(c.onInput&&c.onInput(FM.st,giaTri()))veForm();else kiemForm();}));
+  sheet.querySelectorAll('input[type=date]').forEach(inp=>inp.addEventListener('change',kiemForm));
   $('#fmLuu').addEventListener('click',()=>{if(!kiemForm())return;c.save(FM.st,giaTri());closeSheet();render();toast('Đã lưu');});
   veForm();showSheet();
 }
@@ -1225,7 +1244,7 @@ function veForm(){
 function giaTri(){
   const v={};
   FM.c.f.forEach(x=>{
-    if(!x.id)return;const el=document.getElementById(x.id);if(!el)return;
+    if(!x.id||x.t==='html')return;const el=document.getElementById(x.id);if(!el)return;
     v[x.id]=x.t==='tien'?parseTien(el.value):x.t==='date'?(el.value||isoToday()):el.value.trim();
   });
   return v;
@@ -1233,12 +1252,26 @@ function giaTri(){
 function kiemForm(){
   if(!FM)return false;
   const v=giaTri();
-  FM.c.f.forEach(x=>{if(x.t!=='tien')return;const o=document.getElementById(x.id+'V');if(o)o.textContent=Number.isFinite(v[x.id])&&v[x.id]>0?fmt(v[x.id])+' đ':'';});
+  FM.c.f.forEach(x=>{
+    if(x.t==='html'){const h=document.getElementById(x.id);if(h)h.innerHTML=x.ve(FM.st,v);return;}
+    if(x.t!=='tien')return;const o=document.getElementById(x.id+'V');
+    if(o)o.textContent=x.duoi?x.duoi(FM.st,v):Number.isFinite(v[x.id])&&v[x.id]>0?fmt(v[x.id])+' đ':'';
+  });
   const ok=!!FM.c.ok(FM.st,v), b=$('#fmLuu');if(b)b.disabled=!ok;
   return ok;
 }
 const vanTat=(o)=>Object.assign({id:nid(),loai:'chuyen',ts:Date.now()},o);
-const LAI=[{id:'0',ten:'Không'},{id:'100000',ten:'100k'},{id:'150000',ten:'150k'},{id:'200000',ten:'200k'}];
+/* A rate typed the way the owner remembers it — per 100tr a day (as the sheet keeps it), per day for this loan, or
+   per month of 30 days — becomes per 100tr a day. Empty or 0 = no interest. */
+const DV_LAI=[['u','100tr/ngày'],['ngay','Mỗi ngày'],['thang','Mỗi tháng']];
+function laiNhap(dv,so,goc){
+  if(!(so>0))return 0;
+  if(dv==='u')return Math.round(so);
+  return goc>0?Math.round((dv==='thang'?so/30:so)/goc*1e8):0;
+}
+const doiLai=(dv,so,goc)=>{const r=laiNhap(dv,so,goc);return dv!=='u'&&r?'= '+shortU(r)+' / 100tr / ngày':'';};
+const phieuVay=(ten,goc,ngay,lai)=>{goc=goc>0?goc:0;return `<div class="phieu num">${ten?`<div class="p-ten">${esc(ten)}</div>`:''}<div class="p-so">${fmt(goc)}</div>`
+  +`<div class="p-dong dau"><span>Từ</span><b>${ngay?dmy(ngay):''}</b></div><div class="p-dong"><span>Lãi mỗi ngày</span><b>${fmt(goc/1e8*lai)}</b></div><div class="p-dong"><span>Lãi 30 ngày</span><b>${fmt(goc/1e8*lai*30)}</b></div></div>`;};
 
 function themXay(){
   moForm({title:'Xây nhà',st:{loai:'chi',tu:S.lastTien},f:[
@@ -1256,17 +1289,21 @@ function themXay(){
 }
 function themVay(ai){
   const coLai=st=>{const a=st.ai&&!String(st.ai).startsWith('moi:')?get(st.ai):null;return !!(a&&a.lai);};
-  moForm({title:'Cho vay',st:{ai:ai||null,lai:'0',tu:S.lastTien},f:[
+  const tenOf=st=>!st.ai?'':String(st.ai).startsWith('moi:')?st.ai.slice(4):(get(st.ai)||{}).ten||'';
+  const laiOf=(st,v)=>coLai(st)?get(st.ai).lai:laiNhap(st.dv,v.fvLai,v.fvTien);
+  moForm({title:'Cho vay',st:{ai:ai||null,dv:'u',tu:S.lastTien},f:[
     {t:'chips',k:'ai',lbl:'Ai',list:()=>nguoiL(),moi:'vay'},
-    {t:'tien',id:'fvTien',lbl:'Số tiền gốc'},
+    {t:'html',id:'fvPhieu',ve:(st,v)=>phieuVay(tenOf(st),v.fvTien,v.fvNgay,laiOf(st,v))},
+    {t:'tien',id:'fvTien',lbl:'Số tiền',tron:true},
+    {t:'seg',k:'dv',lbl:'Lãi',opts:DV_LAI,show:st=>!coLai(st)},
+    {t:'tien',id:'fvLai',tron:true,sat:true,duoi:(st,v)=>doiLai(st.dv,v.fvLai,v.fvTien),show:st=>!coLai(st)},
     {t:'date',id:'fvNgay',lbl:'Ngày vay'},
-    {t:'chips',k:'lai',lbl:'Lãi/ngày/100tr',list:()=>LAI,show:st=>!coLai(st)},
     {t:'chips',k:'tu',lbl:'Lấy từ',list:()=>tienL()}
   ],
-  ok:(st,v)=>v.fvTien>0&&!!st.ai&&!!st.tu,
+  ok:(st,v)=>v.fvTien>0&&!!st.ai&&!!st.tu&&!Number.isNaN(v.fvLai),
   save:(st,v)=>{
-    const id=giaiMoi(st.ai,'vay'), a=get(id);
-    if(+st.lai&&!a.lai)a.lai=+st.lai;
+    const id=giaiMoi(st.ai,'vay'), a=get(id), r=laiNhap(st.dv,v.fvLai,v.fvTien);
+    if(r&&!a.lai){a.lai=r;ghiLaiVay(a);}
     addLog(vanTat({viec:'chovay',ngay:v.fvNgay,tu:st.tu,toi:id,tien:v.fvTien}));S.lastTien=st.tu;
   }});
 }
