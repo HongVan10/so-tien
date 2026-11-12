@@ -333,6 +333,8 @@ table.sk{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
 @media (prefers-reduced-motion:reduce){.sheet{animation:none}}
 .sh-h{display:flex;align-items:center;gap:10px}
 .sh-h h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:20px;letter-spacing:-.01em;min-width:0;overflow-wrap:anywhere}
+.sh-h .pen{flex:none;width:34px;height:34px;padding:0;border-radius:10px;display:grid;place-items:center;background:var(--surface-2);border:1.5px solid var(--line);color:var(--ink);cursor:pointer}
+.sh-h .pen svg{width:16px;height:16px}
 .tag{font-size:12px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 9px;white-space:nowrap}
 .fld{display:grid;gap:6px;min-width:0}
 .fld>label{font-size:13px;font-weight:600;color:var(--muted)}
@@ -970,15 +972,29 @@ function openLam(id){
   const es=lamE(id).sort((a,b)=>a.ngay.localeCompare(b.ngay)||a.ts-b.ts), c=lamCong(es);
   let run=0;
   const body=es.map(e=>{run+=lamV(e);return {e,run};}).reverse().map(({e,run})=>`<tr data-log="${e.id}"><td class="d">${dmy(e.ngay).slice(0,5)}</td><td>${esc(e.ghichu||(e.viec==='vao'?'Thu':'Chi'))}</td><td class="r ${e.viec==='vao'?'pos':'neg'}">${fmtS(lamV(e))}</td><td class="r">${fmtS(run)}</td></tr>`).join('');
-  sheet.innerHTML=`<div class="sh-h"><h2>${esc(x.ten)}</h2><span class="tag">Làm ăn</span></div>
+  sheet.innerHTML=`<div class="sh-h"><h2>${esc(x.ten)}</h2><button type="button" class="pen" id="lTen" aria-label="Đổi tên"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button><span class="tag">Làm ăn</span></div>
     <div class="big ${cls(c.loi)}">${fmtS(c.loi)}</div>
     <div class="kvs"><div class="kv"><span>Thu</span><b>${fmt(c.thu)}</b></div><div class="kv"><span>Chi</span><b>${fmt(c.chi)}</b></div></div>
     ${body?`<div class="mini"><table class="sk"><colgroup><col class="c-d"><col><col class="c-t"><col class="c-c"></colgroup><thead><tr><th>Ngày</th><th>Khoản</th><th class="r">Thu · Chi</th><th class="r">Lời/Lỗ</th></tr></thead><tbody>${body}</tbody></table></div>`:`<div class="sk-acts"><button type="button" class="lnk" id="lXoa">Xoá</button></div>`}
     <div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="lGhi">Ghi</button></div>`;
   sheet.querySelectorAll('tr[data-log]').forEach(tr=>tr.addEventListener('click',()=>openLog(tr.dataset.log)));
   $('#lGhi').addEventListener('click',()=>themLam(id));
+  $('#lTen').addEventListener('click',()=>doiTenLam(id));
   const xo=$('#lXoa');if(xo)xo.addEventListener('click',()=>{S.lam=S.lam.filter(l=>l.id!==id);closeSheet();render();toast('Đã xoá');});
   showSheet();
+}
+function doiTenLam(id){
+  const x=S.lam.find(l=>l.id===id);if(!x)return;
+  sheet.innerHTML=`<div class="sh-h"><h2>Đổi tên</h2><span class="tag">Làm ăn</span></div>
+    <div class="fld"><label for="nTen">Tên</label><input id="nTen" autocomplete="off" enterkeyhint="done" value="${esc(x.ten)}"></div>
+    <div class="acts"><button type="button" class="btn ghost" data-close>Đóng</button><button type="button" class="btn pri" id="nLuu" disabled>Lưu</button></div>`;
+  const inp=$('#nTen');
+  const duoc=()=>{const ten=inp.value.trim(), k=bo(ten).trim();return !!ten&&ten!==x.ten&&!S.lam.some(l=>l.id!==id&&bo(l.ten).trim()===k);};
+  const save=()=>{if(!duoc())return;x.ten=inp.value.trim();render();sauThaoTac();openLam(id);toast('Đã lưu');};
+  inp.addEventListener('input',()=>{$('#nLuu').disabled=!duoc();});
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')save();});
+  $('#nLuu').addEventListener('click',save);
+  showSheet();inp.focus();inp.select();
 }
 function themLamMoi(ten){
   const k=bo(ten).trim(), co=S.lam.find(x=>bo(x.ten).trim()===k);if(co)return co.id;
@@ -1137,21 +1153,26 @@ function openLog(id){
   });
   showSheet();
 }
-/* Edit a recorded entry in place: amount, money account(s), note, date. It keeps its Mã, so the sheet row is rewritten. */
+/* Edit a recorded entry in place: amount, money account(s), note, date. It keeps its Mã, so the sheet row is rewritten.
+   A business entry can also switch between Chi and Thu, with the account it came from / went into. */
 function suaDong(e){
-  const chinh=e.loai==='chinh', laTien=id=>!!(get(id)&&get(id).nhom==='tien');
-  const coTu=!chinh&&laTien(e.tu), coToi=!chinh&&laTien(e.toi);
+  const chinh=e.loai==='chinh', laTien=id=>!!(get(id)&&get(id).nhom==='tien'), lam=!chinh&&!!e.lam;
+  const coTu=!chinh&&!lam&&laTien(e.tu), coToi=!chinh&&!lam&&laTien(e.toi);
   const dat=e.viec==='muadat'?S.dat.find(d=>d.ten===e.ghichu&&d.gia===e.tien):null;
-  moForm({title:'Sửa · '+esc(moTa(e).t),st:{tu:coTu?e.tu:null,toi:coToi?e.toi:null},f:[
+  const thu=e.viec==='vao', tkL=st=>st.loai==='chi'?[...tienL(),...S.acc.filter(a=>a.the)]:tienL();
+  moForm({title:'Sửa · '+esc(lam?lamTen(e.lam):moTa(e).t),st:{tu:coTu?e.tu:null,toi:coToi?e.toi:null,loai:thu?'thu':'chi',tk:lam?(thu?e.toi:e.tu):null},f:[
+    ...(lam?[{t:'seg',k:'loai',opts:[['chi','Chi'],['thu','Thu']]}]:[]),
     {t:'tien',id:'feTien',lbl:chinh?'Chênh lệch':'Số tiền',val:fmt(chinh?Math.abs(e.chenh):e.tien)},
+    ...(lam?[{t:'chips',k:'tk',lbl:st=>st.loai==='chi'?'Lấy từ':'Vào',list:tkL}]:[]),
     ...(coTu?[{t:'chips',k:'tu',lbl:'Từ',list:()=>tienL()}]:[]),
     ...(coToi?[{t:'chips',k:'toi',lbl:'Vào',list:()=>tienL()}]:[]),
     {t:'text',id:'feGhi',lbl:'Ghi chú',val:e.ghichu||''},
     {t:'date',id:'feNgay',lbl:'Ngày',val:e.ngay}
   ],
-  ok:(st,v)=>v.feTien>0&&(!coTu||!!st.tu)&&(!coToi||!!st.toi)&&!(coTu&&coToi&&st.tu===st.toi),
+  ok:(st,v)=>v.feTien>0&&(!coTu||!!st.tu)&&(!coToi||!!st.toi)&&!(coTu&&coToi&&st.tu===st.toi)&&(!lam||!!st.tk),
   save:(st,v)=>{
     if(chinh)e.chenh=(e.chenh<0?-1:1)*v.feTien;else e.tien=v.feTien;
+    if(lam)Object.assign(e,st.loai==='chi'?{viec:'xai',tu:st.tk,toi:'chi'}:{viec:'vao',tu:'thu',toi:st.tk});
     if(coTu)e.tu=st.tu;
     if(coToi)e.toi=st.toi;
     if(v.feGhi||!dat)e.ghichu=v.feGhi;
@@ -1956,7 +1977,7 @@ async function tai(lanDau){
    Rows the app writes carry its Mã; those are kept in step with the app. */
 const T_CT='Chi tiết', T_XN='Xây nhà', T_VAY='Vay', T_DAU='Đầu tư', T_TQ='Tổng quan';
 const TABS_CU=[T_CT,T_XN,T_VAY,T_DAU,T_TQ];
-let TAB_CU=null, NOI={ct:{}}, VAY_T=0, VAY_DONG=new Map(), VAY_NGAY=new Map(); // loan id → the Vay row holding its rate (column D) / its loan date (column C)
+let TAB_CU=null, NOI={ct:{}}, VAY_T=0, VAY_DONG=new Map(), VAY_NGAY=new Map(), VAY_TAY=new Set(); // loan id → the Vay row holding its rate (column D) / its loan date (column C); loans with rows the owner typed
 const chu=v=>String(v??'').trim();
 const soO=v=>{if(typeof v==='number')return v;const s=chu(v);if(!s||s.startsWith('='))return null;const d=s.replace(/[^\d]/g,'');return d?(/^[-−]/.test(s)?-1:1)*parseInt(d,10):null;};
 const isoTuDmy=v=>{const m=chu(v).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);return m?m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'):null;};
@@ -2012,22 +2033,26 @@ function docTabCu(tabs){
   if(vy){
     const t=VAY_T=vayTong(vy), nhom=new Map();let cur=null;
     for(let row=2;row<t;row++){
-      const r=vy[row-1]||[], ten=chu(r[0]), b=soO(r[1]);
+      const r=vy[row-1]||[], ten=chu(r[0]), b=soO(r[1]), app=!!chu(r[11]);
       if(ten){
-        cur=bo(ten).trim();if(!nhom.has(cur))nhom.set(cur,{ten,so:0,ngay:null,lai:null,dong:row,dongNgay:row});
-        const g=nhom.get(cur);if(b!=null)g.so+=b;
-        const d=isoTuDmy(r[2]);if(d&&(!g.ngay||d<g.ngay)){g.ngay=d;g.dongNgay=row;}
+        cur=bo(ten).trim();if(!nhom.has(cur))nhom.set(cur,{ten,so:0,ngay:null,lai:null,dong:row,dongNgay:row,tay:false});
+        const g=nhom.get(cur);
+        if(!app){
+          g.tay=true;if(b!=null)g.so+=b;
+          const d=isoTuDmy(r[2]);if(d&&(!g.ngay||d<g.ngay)){g.ngay=d;g.dongNgay=row;}
+        }
         const l=soO(r[3]);if(l!=null&&g.lai==null){g.lai=l;g.dong=row;}
-      }else if(cur&&b!=null)nhom.get(cur).so+=b;
+      }else if(cur&&b!=null){const g=nhom.get(cur);g.so+=b;g.tay=true;}
     }
     const vays=S.acc.filter(a=>a.nhom==='vay');
     for(const a of vays)a.so=0;
-    VAY_DONG=new Map();VAY_NGAY=new Map();
+    VAY_DONG=new Map();VAY_NGAY=new Map();VAY_TAY=new Set();
     for(const [k,g] of nhom){
       let a=vays.find(x=>bo(x.ten).trim()===k)||vays.find(x=>(x.alias||[]).includes(k));
-      if(!a){a={id:'v'+uid(),ten:g.ten,nhom:'vay',so:0};S.acc.push(a);vays.push(a);}
+      if(!a){if(!g.tay)continue;a={id:'v'+uid(),ten:g.ten,nhom:'vay',so:0};S.acc.push(a);vays.push(a);}
       a.so=g.so;if(g.ngay)a.ngayVay=g.ngay;if(g.lai!=null)a.lai=g.lai;
-      VAY_DONG.set(a.id,g.dong);VAY_NGAY.set(a.id,g.dongNgay);
+      VAY_DONG.set(a.id,g.dong);
+      if(g.tay){VAY_NGAY.set(a.id,g.dongNgay);VAY_TAY.add(a.id);}
     }
   }
 }
@@ -2088,11 +2113,35 @@ function ghiTabCu(){
       else{const r=hangTrong(T_XN,4,[0,1,7]);viet(T_XN,r,1,[[w.t,w.v]]);viet(T_XN,r,8,[[id]]);}
     }
   }
-  // Vay: every move of a loan account, in date order, beside the owner's table; the total row adds them
+  // Vay: the money first lent to someone new goes into the owner's table like a row they typed (Mã in L);
+// every other move of a loan account, in date order, sits beside the table; the total row adds both
   const vy=TAB_CU[T_VAY];
   if(vy){
-    const vays=new Set(S.acc.filter(a=>a.nhom==='vay').map(a=>a.id)), dong=[];
+    const vays=new Set(S.acc.filter(a=>a.nhom==='vay').map(a=>a.id)), dong=[], t=VAY_T;
+    const bang=new Map(), co=new Map();let doi=false;
+    for(const a of S.acc)if(a.nhom==='vay'&&!VAY_TAY.has(a.id)){const e=moDau(a);if(e)bang.set(e.id,{a,e});}
+    for(let row=2;row<t;row++){const m=chu((vy[row-1]||[])[11]);if(m)co.set(m,row);}
+    const soE=e=>e.loai==='chinh'?e.chenh:e.tien;
+    for(const [m,row] of co){
+      const x=bang.get(m);
+      if(!x){
+        viet(T_VAY,row,1,[['','','','']]);viet(T_VAY,row,12,[['']]);co.delete(m);doi=true;
+        for(const [id,r] of VAY_DONG)if(r===row)VAY_DONG.delete(id);
+        continue;
+      }
+      const R=vy[row-1]||[], w=[x.a.ten,soE(x.e),dmy(x.e.ngay)];
+      if(chu(R[0])!==w[0]||soO(R[1])!==w[1]||chu(R[2])!==w[2]){viet(T_VAY,row,1,[w]);doi=true;}
+      VAY_DONG.set(x.a.id,row);
+    }
+    for(const [m,x] of bang){
+      if(co.has(m))continue;
+      let row=0;for(let r=2;r<t&&!row;r++){const R=vy[r-1]||[];if([0,1,2,3,11].every(j=>chu(R[j])===''))row=r;}
+      if(!row)continue; // no empty row left above the total: this one stays in the block
+      viet(T_VAY,row,1,[[x.a.ten,soE(x.e),dmy(x.e.ngay),x.a.lai||'']]);viet(T_VAY,row,12,[[m]]);
+      co.set(m,row);VAY_DONG.set(x.a.id,row);doi=true;
+    }
     for(const e of [...S.log].sort((a,b)=>(a.ngay||'').localeCompare(b.ngay||'')||(a.ts||0)-(b.ts||0))){
+      if(co.has(e.id))continue;
       let id=null,v=0;
       if(e.loai==='chuyen'){if(vays.has(e.toi)){id=e.toi;v=e.tien;}else if(vays.has(e.tu)){id=e.tu;v=-e.tien;}}
       else if(vays.has(e.acc)){id=e.acc;v=e.chenh;}
@@ -2102,11 +2151,8 @@ function ghiTabCu(){
     let n=0;for(let i=0;i<vy.length;i++)if(o(i).some(x=>x!==''))n=i+1;   // rows the block takes now
     const want=dong.length||n?[['Từ app','Tiền','Ngày','Ghi chú','Mã'],...dong]:[];
     const giong=n===want.length&&want.every((r,i)=>JSON.stringify(r.map(chu))===JSON.stringify(o(i)));
-    if(!giong){
-      const t=VAY_T;
-      viet(T_VAY,1,13,[...want,...Array.from({length:Math.max(0,n-want.length)},()=>['','','','',''])]);
-      viet(T_VAY,t,2,[[`=SUM(B2:B${t-1})+SUM(N2:N500)`]]);
-    }
+    if(!giong)viet(T_VAY,1,13,[...want,...Array.from({length:Math.max(0,n-want.length)},()=>['','','','',''])]);
+    if(!giong||doi)viet(T_VAY,t,2,[[`=SUM(B2:B${t-1})+SUM(N2:N500)`]]);
   }
   // Đầu tư: the land list is the tab; new land goes into the first empty row, removed land is cleared
   const dt=TAB_CU[T_DAU];
